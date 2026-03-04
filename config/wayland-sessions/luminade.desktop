@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=LuminaDE
+Comment=LuminaDE Wayland Session (River + Zig components)
+Exec=/usr/bin/luminade-session
+Type=Application
+DesktopNames=LuminaDE
+Keywords=wayland;compositor;river;desktop;

@@ -1,0 +1,16 @@
+.{
+    .name = .luminade,
+    .version = "0.4.0",
+    .fingerprint = 0x7cbca8e7ea7414f2,
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "README.md",
+        "apps",
+        "libs",
+        "config",
+        "docs",
+        "scripts",
+    },
+}

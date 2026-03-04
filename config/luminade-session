@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+export XDG_CURRENT_DESKTOP=LuminaDE
+export XDG_SESSION_DESKTOP=LuminaDE
+export DESKTOP_SESSION=luminade
+
+RIVER_INIT="${LUMINADE_RIVER_INIT:-/etc/luminade/river.init}"
+exec river -c "$RIVER_INIT"

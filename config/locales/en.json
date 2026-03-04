@@ -1,0 +1,5 @@
+{
+  "panel.ready": "Panel ready: workspaces, clock and status modules online.",
+  "launcher.ready": "Launcher ready: type to search apps, files and commands.",
+  "settings.ready": "Settings ready: configure desktop and system integration."
+}

@@ -1,0 +1,39 @@
+{
+  "appearance": {
+    "theme": "dark",
+    "density": "comfortable",
+    "cornerRadius": 12,
+    "blurSigma": 14,
+    "accent": "blue"
+  },
+  "layout": {
+    "panelHeight": 36,
+    "workspaceGaps": 8,
+    "smartHidePanel": false,
+    "launcherWidth": 780,
+    "windowMode": "tiling",
+    "tilingAlgorithm": "master_stack",
+    "masterRatioPercent": 60,
+    "layoutGap": 8,
+    "floatOverlaysInHybrid": true
+  },
+  "motion": {
+    "profile": "smooth",
+    "reducedMotion": false,
+    "durationShortMs": 120,
+    "durationMediumMs": 180
+  },
+  "input": {
+    "pointerSensitivity": 0,
+    "accelProfile": "adaptive",
+    "repeatDelayMs": 300,
+    "repeatRate": 50,
+    "tapToClick": true,
+    "naturalScroll": false,
+    "interactionMode": "mouse_first"
+  },
+  "localization": {
+    "defaultLanguage": "en",
+    "fallback": ["en"]
+  }
+}

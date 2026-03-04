@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+# LuminaDE River session bootstrap
+# This file is intentionally small; logic should move into dedicated Zig daemons.
+
+if ! pgrep -u "${UID:-$(id -u)}" -x luminade-sessiond >/dev/null 2>&1; then
+	riverctl spawn "luminade-session-autostart"
+fi
+
+# Example defaults
+riverctl set-repeat 50 300
+riverctl map normal Super Return spawn foot
+riverctl map normal Super D spawn "bash -lc 'luminade-sessionctl launcher-query "" || scripts/sessionctl.sh launcher-query ""'"
+riverctl map normal Super S spawn "bash -lc 'luminade-sessionctl open-settings || scripts/sessionctl.sh open-settings'"
