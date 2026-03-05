@@ -1,10 +1,12 @@
 const std = @import("std");
 
+/// Errors returned by profile loading/saving and field updates.
 pub const ProfileError = error{
     InvalidField,
     InvalidValue,
 };
 
+/// Supported UI languages.
 pub const Lang = enum {
     en,
     pl,
@@ -15,20 +17,24 @@ pub const Lang = enum {
     }
 };
 
+/// Top-level LuminaDE application kinds.
 pub const AppKind = enum {
     panel,
     launcher,
     settings,
+    welcome,
 
     pub fn asString(self: AppKind) []const u8 {
         return switch (self) {
             .panel => "panel",
             .launcher => "launcher",
             .settings => "settings",
+            .welcome => "welcome",
         };
     }
 };
 
+/// Runtime bundle shared by apps (allocator + language + desktop profile).
 pub const RuntimeConfig = struct {
     allocator: std.mem.Allocator,
     lang: Lang,
@@ -39,6 +45,122 @@ pub const RuntimeConfig = struct {
     }
 };
 
+/// Icon style variant used when resolving icon assets.
+pub const IconVariant = enum {
+    colored,
+    symbolic,
+};
+
+/// Best-effort icon path resolver with in-memory cache.
+///
+/// This is a skeleton API for v0.5+: it resolves names against common
+/// `hicolor` locations and returns owned path slices for callers.
+pub const IconResolver = struct {
+    allocator: std.mem.Allocator,
+    cache: std.StringHashMap([]u8),
+
+    /// Initialize resolver with empty cache.
+    pub fn init(allocator: std.mem.Allocator) IconResolver {
+        return .{
+            .allocator = allocator,
+            .cache = std.StringHashMap([]u8).init(allocator),
+        };
+    }
+
+    /// Free all cached keys/paths owned by resolver.
+    pub fn deinit(self: *IconResolver) void {
+        var it = self.cache.iterator();
+        while (it.next()) |item| {
+            self.allocator.free(item.key_ptr.*);
+            self.allocator.free(item.value_ptr.*);
+        }
+        self.cache.deinit();
+    }
+
+    /// Resolve icon name to absolute path in common `hicolor` directories.
+    ///
+    /// Returns an owned slice that the caller must free.
+    pub fn resolve(self: *IconResolver, name: []const u8, variant: IconVariant) !?[]u8 {
+        const cache_key = try std.fmt.allocPrint(self.allocator, "{s}:{s}", .{ @tagName(variant), name });
+
+        if (self.cache.get(cache_key)) |cached| {
+            self.allocator.free(cache_key);
+            return try self.allocator.dupe(u8, cached);
+        }
+
+        const resolved = try self.findIconPath(name, variant) orelse blk: {
+            if (!std.mem.eql(u8, name, "luminade")) {
+                if (try self.findIconPath("luminade", variant)) |fallback| break :blk fallback;
+            }
+            self.allocator.free(cache_key);
+            return null;
+        };
+
+        try self.cache.put(cache_key, resolved);
+        return try self.allocator.dupe(u8, resolved);
+    }
+
+    fn findIconPath(self: *IconResolver, name: []const u8, variant: IconVariant) !?[]u8 {
+        if (std.posix.getenv("XDG_DATA_HOME")) |root| {
+            if (try self.findInRoot(root, name, variant)) |path| return path;
+        }
+
+        if (std.posix.getenv("HOME")) |home| {
+            const local_root = try std.fmt.allocPrint(self.allocator, "{s}/.local/share", .{home});
+            defer self.allocator.free(local_root);
+            if (try self.findInRoot(local_root, name, variant)) |path| return path;
+        }
+
+        if (try self.findInRoot("/usr/local/share", name, variant)) |path| return path;
+        if (try self.findInRoot("/usr/share", name, variant)) |path| return path;
+
+        return null;
+    }
+
+    fn findInRoot(self: *IconResolver, root: []const u8, name: []const u8, variant: IconVariant) !?[]u8 {
+        const primary_dir = switch (variant) {
+            .colored => "scalable",
+            .symbolic => "symbolic",
+        };
+        const secondary_dir = switch (variant) {
+            .colored => "symbolic",
+            .symbolic => "scalable",
+        };
+
+        const dirs = [_][]const u8{ primary_dir, secondary_dir };
+        const exts = [_][]const u8{ "svg", "png" };
+
+        for (dirs) |dir| {
+            for (exts) |ext| {
+                const path = try std.fmt.allocPrint(
+                    self.allocator,
+                    "{s}/icons/hicolor/{s}/apps/{s}.{s}",
+                    .{ root, dir, name, ext },
+                );
+                if (iconPathExists(path)) {
+                    return path;
+                }
+                self.allocator.free(path);
+            }
+        }
+
+        return null;
+    }
+};
+
+fn iconPathExists(path: []const u8) bool {
+    if (std.fs.path.isAbsolute(path)) {
+        const file = std.fs.openFileAbsolute(path, .{}) catch return false;
+        file.close();
+        return true;
+    }
+
+    const file = std.fs.cwd().openFile(path, .{}) catch return false;
+    file.close();
+    return true;
+}
+
+/// Global theme mode.
 pub const ThemeMode = enum {
     dark,
     light,
@@ -51,6 +173,122 @@ pub const ThemeMode = enum {
     }
 };
 
+/// Named theme profile preset persisted in user config.
+pub const ThemeProfileName = enum {
+    aurora_glass,
+    graphite,
+    solaris_light,
+
+    pub fn fromString(value: []const u8) ThemeProfileName {
+        if (std.mem.eql(u8, value, "graphite")) return .graphite;
+        if (std.mem.eql(u8, value, "solaris_light")) return .solaris_light;
+        return .aurora_glass;
+    }
+};
+
+/// Resolved theme token profile used by UI runtime.
+pub const ThemeProfile = struct {
+    name: ThemeProfileName,
+    mode: ThemeMode,
+    corner_radius: u8,
+    spacing_unit: u8,
+    blur_sigma: u8,
+    accent: []u8,
+
+    pub fn builtIn(allocator: std.mem.Allocator, name: ThemeProfileName, mode: ThemeMode) !ThemeProfile {
+        return switch (name) {
+            .aurora_glass => .{
+                .name = .aurora_glass,
+                .mode = mode,
+                .corner_radius = 18,
+                .spacing_unit = 10,
+                .blur_sigma = 20,
+                .accent = try allocator.dupe(u8, "blue"),
+            },
+            .graphite => .{
+                .name = .graphite,
+                .mode = mode,
+                .corner_radius = 12,
+                .spacing_unit = 8,
+                .blur_sigma = 12,
+                .accent = try allocator.dupe(u8, "slate"),
+            },
+            .solaris_light => .{
+                .name = .solaris_light,
+                .mode = .light,
+                .corner_radius = 16,
+                .spacing_unit = 10,
+                .blur_sigma = 8,
+                .accent = try allocator.dupe(u8, "amber"),
+            },
+        };
+    }
+
+    pub fn deinit(self: *ThemeProfile, allocator: std.mem.Allocator) void {
+        allocator.free(self.accent);
+    }
+
+    pub fn setField(self: *ThemeProfile, allocator: std.mem.Allocator, key: []const u8, value: []const u8) ProfileError!void {
+        if (std.mem.eql(u8, key, "mode")) {
+            self.mode = ThemeMode.fromString(value);
+            return;
+        }
+        if (std.mem.eql(u8, key, "corner_radius")) {
+            self.corner_radius = std.fmt.parseUnsigned(u8, value, 10) catch return error.InvalidValue;
+            return;
+        }
+        if (std.mem.eql(u8, key, "spacing_unit")) {
+            self.spacing_unit = std.fmt.parseUnsigned(u8, value, 10) catch return error.InvalidValue;
+            return;
+        }
+        if (std.mem.eql(u8, key, "blur_sigma")) {
+            self.blur_sigma = std.fmt.parseUnsigned(u8, value, 10) catch return error.InvalidValue;
+            return;
+        }
+        if (std.mem.eql(u8, key, "accent")) {
+            allocator.free(self.accent);
+            self.accent = try allocator.dupe(u8, value);
+            return;
+        }
+        return error.InvalidField;
+    }
+};
+
+/// Shortcut actions exposed in Settings and consumed by launcher/panel/session.
+pub const ShortcutAction = enum {
+    launcher_toggle,
+    terminal_open,
+    browser_open,
+    files_open,
+    settings_open,
+
+    pub fn asString(self: ShortcutAction) []const u8 {
+        return switch (self) {
+            .launcher_toggle => "launcher_toggle",
+            .terminal_open => "terminal_open",
+            .browser_open => "browser_open",
+            .files_open => "files_open",
+            .settings_open => "settings_open",
+        };
+    }
+
+    pub fn fromString(value: []const u8) ?ShortcutAction {
+        if (std.mem.eql(u8, value, "launcher_toggle")) return .launcher_toggle;
+        if (std.mem.eql(u8, value, "terminal_open")) return .terminal_open;
+        if (std.mem.eql(u8, value, "browser_open")) return .browser_open;
+        if (std.mem.eql(u8, value, "files_open")) return .files_open;
+        if (std.mem.eql(u8, value, "settings_open")) return .settings_open;
+        return null;
+    }
+};
+
+/// One persisted shortcut binding.
+pub const ShortcutBinding = struct {
+    action: ShortcutAction,
+    chord: []u8,
+};
+
+/// Density preset for spacing/layout defaults.
 pub const Density = enum {
     compact,
     comfortable,
@@ -61,6 +299,7 @@ pub const Density = enum {
     }
 };
 
+/// Motion preset for UI transitions.
 pub const Motion = enum {
     minimal,
     smooth,
@@ -71,6 +310,7 @@ pub const Motion = enum {
     }
 };
 
+/// Window management mode.
 pub const WindowMode = enum {
     tiling,
     floating,
@@ -83,6 +323,7 @@ pub const WindowMode = enum {
     }
 };
 
+/// Interaction preference for ranking and hitbox tuning.
 pub const InteractionMode = enum {
     keyboard_first,
     balanced,
@@ -95,6 +336,7 @@ pub const InteractionMode = enum {
     }
 };
 
+/// Pointer acceleration strategy.
 pub const PointerAccelProfile = enum {
     adaptive,
     flat,
@@ -105,6 +347,7 @@ pub const PointerAccelProfile = enum {
     }
 };
 
+/// Tiling layout algorithm.
 pub const TilingAlgorithm = enum {
     master_stack,
     grid,
@@ -115,6 +358,59 @@ pub const TilingAlgorithm = enum {
     }
 };
 
+/// Multi-display layout mode.
+pub const DisplayLayoutMode = enum {
+    single,
+    extended,
+    mirrored,
+
+    pub fn fromString(value: []const u8) DisplayLayoutMode {
+        if (std.mem.eql(u8, value, "extended")) return .extended;
+        if (std.mem.eql(u8, value, "mirrored")) return .mirrored;
+        return .single;
+    }
+};
+
+/// Default terminal app choices exposed in profile/settings.
+pub const DefaultTerminalApp = enum {
+    foot,
+    alacritty,
+    kitty,
+
+    pub fn fromString(value: []const u8) DefaultTerminalApp {
+        if (std.mem.eql(u8, value, "alacritty")) return .alacritty;
+        if (std.mem.eql(u8, value, "kitty")) return .kitty;
+        return .foot;
+    }
+};
+
+/// Default browser app choices exposed in profile/settings.
+pub const DefaultBrowserApp = enum {
+    firefox,
+    chromium,
+    brave,
+
+    pub fn fromString(value: []const u8) DefaultBrowserApp {
+        if (std.mem.eql(u8, value, "chromium")) return .chromium;
+        if (std.mem.eql(u8, value, "brave")) return .brave;
+        return .firefox;
+    }
+};
+
+/// Default file manager choices exposed in profile/settings.
+pub const DefaultFilesApp = enum {
+    thunar,
+    nautilus,
+    dolphin,
+
+    pub fn fromString(value: []const u8) DefaultFilesApp {
+        if (std.mem.eql(u8, value, "nautilus")) return .nautilus;
+        if (std.mem.eql(u8, value, "dolphin")) return .dolphin;
+        return .thunar;
+    }
+};
+
+/// Summary returned by input profile application pipeline.
 pub const InputApplyReport = struct {
     backend: []const u8,
     applied_count: u8,
@@ -122,6 +418,18 @@ pub const InputApplyReport = struct {
     device_count: u8,
 };
 
+/// Cross-app system actions executed via shell command fallbacks.
+pub const SystemAction = enum {
+    lock_session,
+    suspend,
+    logout,
+    audio_volume_up,
+    audio_volume_down,
+    audio_mute_toggle,
+    open_network,
+};
+
+/// Per-device input override rule matched by device-name substring.
 pub const DeviceInputRule = struct {
     matcher: []u8,
     pointer_sensitivity: ?i8,
@@ -130,6 +438,7 @@ pub const DeviceInputRule = struct {
     tap_to_click: ?bool,
 };
 
+/// Effective input profile after global + device-rule merge.
 pub const EffectiveInputProfile = struct {
     pointer_sensitivity: i8,
     pointer_accel_profile: PointerAccelProfile,
@@ -137,14 +446,21 @@ pub const EffectiveInputProfile = struct {
     tap_to_click: bool,
 };
 
+/// Persistent desktop profile used by panel/launcher/settings/welcome.
 pub const DesktopProfile = struct {
     theme_mode: ThemeMode,
+    theme_profile: ThemeProfileName,
     density: Density,
     motion: Motion,
     panel_height: u8,
     corner_radius: u8,
     blur_sigma: u8,
     launcher_width: u16,
+    display_scale_percent: u8,
+    display_layout_mode: DisplayLayoutMode,
+    default_terminal_app: DefaultTerminalApp,
+    default_browser_app: DefaultBrowserApp,
+    default_files_app: DefaultFilesApp,
     workspace_gaps: u8,
     smart_hide_panel: bool,
     window_mode: WindowMode,
@@ -161,13 +477,19 @@ pub const DesktopProfile = struct {
     pub fn modernDefault() DesktopProfile {
         return .{
             .theme_mode = .dark,
+            .theme_profile = .aurora_glass,
             .density = .comfortable,
             .motion = .smooth,
-            .panel_height = 36,
-            .corner_radius = 12,
-            .blur_sigma = 14,
-            .launcher_width = 780,
-            .workspace_gaps = 8,
+            .panel_height = 42,
+            .corner_radius = 18,
+            .blur_sigma = 20,
+            .launcher_width = 960,
+            .display_scale_percent = 100,
+            .display_layout_mode = .single,
+            .default_terminal_app = .foot,
+            .default_browser_app = .firefox,
+            .default_files_app = .thunar,
+            .workspace_gaps = 12,
             .smart_hide_panel = false,
             .window_mode = .tiling,
             .interaction_mode = .mouse_first,
@@ -177,7 +499,7 @@ pub const DesktopProfile = struct {
             .tap_to_click = true,
             .tiling_algorithm = .master_stack,
             .master_ratio_percent = 60,
-            .layout_gap = 8,
+            .layout_gap = 12,
             .float_overlays_in_hybrid = true,
         };
     }
@@ -230,12 +552,18 @@ pub const DesktopProfile = struct {
         const writer = file.writer();
         try writer.writeAll("# LuminaDE desktop profile\n");
         try writer.print("theme={s}\n", .{@tagName(self.theme_mode)});
+        try writer.print("theme_profile={s}\n", .{@tagName(self.theme_profile)});
         try writer.print("density={s}\n", .{@tagName(self.density)});
         try writer.print("motion={s}\n", .{@tagName(self.motion)});
         try writer.print("panel_height={d}\n", .{self.panel_height});
         try writer.print("corner_radius={d}\n", .{self.corner_radius});
         try writer.print("blur_sigma={d}\n", .{self.blur_sigma});
         try writer.print("launcher_width={d}\n", .{self.launcher_width});
+        try writer.print("display_scale_percent={d}\n", .{self.display_scale_percent});
+        try writer.print("display_layout_mode={s}\n", .{@tagName(self.display_layout_mode)});
+        try writer.print("default_terminal_app={s}\n", .{@tagName(self.default_terminal_app)});
+        try writer.print("default_browser_app={s}\n", .{@tagName(self.default_browser_app)});
+        try writer.print("default_files_app={s}\n", .{@tagName(self.default_files_app)});
         try writer.print("workspace_gaps={d}\n", .{self.workspace_gaps});
         try writer.print("smart_hide_panel={s}\n", .{if (self.smart_hide_panel) "true" else "false"});
         try writer.print("window_mode={s}\n", .{@tagName(self.window_mode)});
@@ -253,6 +581,10 @@ pub const DesktopProfile = struct {
     pub fn setField(self: *DesktopProfile, key: []const u8, value: []const u8) ProfileError!void {
         if (std.mem.eql(u8, key, "theme")) {
             self.theme_mode = ThemeMode.fromString(value);
+            return;
+        }
+        if (std.mem.eql(u8, key, "theme_profile")) {
+            self.theme_profile = ThemeProfileName.fromString(value);
             return;
         }
         if (std.mem.eql(u8, key, "density")) {
@@ -277,6 +609,28 @@ pub const DesktopProfile = struct {
         }
         if (std.mem.eql(u8, key, "launcher_width")) {
             self.launcher_width = std.fmt.parseUnsigned(u16, value, 10) catch return error.InvalidValue;
+            return;
+        }
+        if (std.mem.eql(u8, key, "display_scale_percent")) {
+            const parsed_scale = std.fmt.parseUnsigned(u8, value, 10) catch return error.InvalidValue;
+            if (parsed_scale < 50 or parsed_scale > 200) return error.InvalidValue;
+            self.display_scale_percent = parsed_scale;
+            return;
+        }
+        if (std.mem.eql(u8, key, "display_layout_mode")) {
+            self.display_layout_mode = DisplayLayoutMode.fromString(value);
+            return;
+        }
+        if (std.mem.eql(u8, key, "default_terminal_app")) {
+            self.default_terminal_app = DefaultTerminalApp.fromString(value);
+            return;
+        }
+        if (std.mem.eql(u8, key, "default_browser_app")) {
+            self.default_browser_app = DefaultBrowserApp.fromString(value);
+            return;
+        }
+        if (std.mem.eql(u8, key, "default_files_app")) {
+            self.default_files_app = DefaultFilesApp.fromString(value);
             return;
         }
         if (std.mem.eql(u8, key, "workspace_gaps")) {
@@ -340,6 +694,9 @@ pub const DesktopProfile = struct {
         const env_theme = std.posix.getenv("LUMINADE_THEME") orelse @tagName(self.theme_mode);
         self.theme_mode = ThemeMode.fromString(env_theme);
 
+        const env_theme_profile = std.posix.getenv("LUMINADE_THEME_PROFILE") orelse @tagName(self.theme_profile);
+        self.theme_profile = ThemeProfileName.fromString(env_theme_profile);
+
         const env_density = std.posix.getenv("LUMINADE_DENSITY") orelse @tagName(self.density);
         self.density = Density.fromString(env_density);
 
@@ -355,6 +712,26 @@ pub const DesktopProfile = struct {
         if (env_launcher_width) |value| {
             self.launcher_width = std.fmt.parseUnsigned(u16, value, 10) catch self.launcher_width;
         }
+
+        const env_display_scale = std.posix.getenv("LUMINADE_DISPLAY_SCALE_PERCENT");
+        if (env_display_scale) |value| {
+            const parsed_scale = std.fmt.parseUnsigned(u8, value, 10) catch self.display_scale_percent;
+            if (parsed_scale >= 50 and parsed_scale <= 200) {
+                self.display_scale_percent = parsed_scale;
+            }
+        }
+
+        const env_display_layout = std.posix.getenv("LUMINADE_DISPLAY_LAYOUT_MODE") orelse @tagName(self.display_layout_mode);
+        self.display_layout_mode = DisplayLayoutMode.fromString(env_display_layout);
+
+        const env_default_terminal = std.posix.getenv("LUMINADE_DEFAULT_TERMINAL_APP") orelse @tagName(self.default_terminal_app);
+        self.default_terminal_app = DefaultTerminalApp.fromString(env_default_terminal);
+
+        const env_default_browser = std.posix.getenv("LUMINADE_DEFAULT_BROWSER_APP") orelse @tagName(self.default_browser_app);
+        self.default_browser_app = DefaultBrowserApp.fromString(env_default_browser);
+
+        const env_default_files = std.posix.getenv("LUMINADE_DEFAULT_FILES_APP") orelse @tagName(self.default_files_app);
+        self.default_files_app = DefaultFilesApp.fromString(env_default_files);
 
         const env_workspace_gaps = std.posix.getenv("LUMINADE_WORKSPACE_GAPS");
         if (env_workspace_gaps) |value| {
@@ -414,8 +791,36 @@ pub const DesktopProfile = struct {
             self.float_overlays_in_hybrid = parseBool(value);
         }
     }
+
+    /// Resolve terminal executable name from current default-terminal setting.
+    pub fn terminalCommand(self: DesktopProfile) []const u8 {
+        return switch (self.default_terminal_app) {
+            .foot => "foot",
+            .alacritty => "alacritty",
+            .kitty => "kitty",
+        };
+    }
+
+    /// Resolve browser executable name from current default-browser setting.
+    pub fn browserCommand(self: DesktopProfile) []const u8 {
+        return switch (self.default_browser_app) {
+            .firefox => "firefox",
+            .chromium => "chromium",
+            .brave => "brave-browser",
+        };
+    }
+
+    /// Resolve file-manager executable name from current default-files setting.
+    pub fn filesCommand(self: DesktopProfile) []const u8 {
+        return switch (self.default_files_app) {
+            .thunar => "thunar",
+            .nautilus => "nautilus",
+            .dolphin => "dolphin",
+        };
+    }
 };
 
+/// Resolve desktop profile path (`LUMINADE_PROFILE_PATH` or default).
 pub fn profilePath(allocator: std.mem.Allocator) ![]u8 {
     if (std.posix.getenv("LUMINADE_PROFILE_PATH")) |value| {
         return try allocator.dupe(u8, value);
@@ -424,6 +829,7 @@ pub fn profilePath(allocator: std.mem.Allocator) ![]u8 {
     return try allocator.dupe(u8, ".luminade/profile.conf");
 }
 
+/// Resolve per-device input rules path (`LUMINADE_DEVICE_PROFILES_PATH` or default).
 pub fn deviceProfilesPath(allocator: std.mem.Allocator) ![]u8 {
     if (std.posix.getenv("LUMINADE_DEVICE_PROFILES_PATH")) |value| {
         return try allocator.dupe(u8, value);
@@ -432,6 +838,225 @@ pub fn deviceProfilesPath(allocator: std.mem.Allocator) ![]u8 {
     return try allocator.dupe(u8, ".luminade/device-profiles.conf");
 }
 
+/// Resolve theme profile override path (`LUMINADE_THEME_PROFILE_DIR` or default).
+pub fn themeProfilePath(allocator: std.mem.Allocator, profile_name: ThemeProfileName) ![]u8 {
+    if (std.posix.getenv("LUMINADE_THEME_PROFILE_DIR")) |dir| {
+        return try std.fmt.allocPrint(allocator, "{s}/{s}.conf", .{ dir, @tagName(profile_name) });
+    }
+    return try std.fmt.allocPrint(allocator, ".luminade/themes/{s}.conf", .{@tagName(profile_name)});
+}
+
+/// Load resolved theme profile (built-in fallback + optional local override file).
+pub fn loadThemeProfile(allocator: std.mem.Allocator, desktop: DesktopProfile) !ThemeProfile {
+    var theme = try ThemeProfile.builtIn(allocator, desktop.theme_profile, desktop.theme_mode);
+
+    const path = try themeProfilePath(allocator, desktop.theme_profile);
+    defer allocator.free(path);
+
+    var file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return theme,
+        else => return err,
+    };
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 16 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line_raw| {
+        const line = std.mem.trim(u8, line_raw, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+
+        const eq_idx = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+        const key = std.mem.trim(u8, line[0..eq_idx], " \t\r");
+        const value = std.mem.trim(u8, line[eq_idx + 1 ..], " \t\r");
+        theme.setField(allocator, key, value) catch {};
+    }
+
+    return theme;
+}
+
+/// Persist concrete theme profile tokens to profile override file.
+pub fn saveThemeProfile(allocator: std.mem.Allocator, theme: ThemeProfile) !void {
+    const path = try themeProfilePath(allocator, theme.name);
+    defer allocator.free(path);
+
+    const dir_name = std.fs.path.dirname(path) orelse ".";
+    try std.fs.cwd().makePath(dir_name);
+
+    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
+    defer file.close();
+
+    const writer = file.writer();
+    try writer.writeAll("# LuminaDE theme profile override\n");
+    try writer.print("mode={s}\n", .{@tagName(theme.mode)});
+    try writer.print("corner_radius={d}\n", .{theme.corner_radius});
+    try writer.print("spacing_unit={d}\n", .{theme.spacing_unit});
+    try writer.print("blur_sigma={d}\n", .{theme.blur_sigma});
+    try writer.print("accent={s}\n", .{theme.accent});
+}
+
+/// Resolve shortcuts file path (`LUMINADE_SHORTCUTS_PATH` or default).
+pub fn shortcutsPath(allocator: std.mem.Allocator) ![]u8 {
+    if (std.posix.getenv("LUMINADE_SHORTCUTS_PATH")) |value| {
+        return try allocator.dupe(u8, value);
+    }
+    return try allocator.dupe(u8, ".luminade/shortcuts.conf");
+}
+
+fn defaultShortcutFor(action: ShortcutAction) []const u8 {
+    return switch (action) {
+        .launcher_toggle => "Super+Space",
+        .terminal_open => "Super+Enter",
+        .browser_open => "Super+B",
+        .files_open => "Super+E",
+        .settings_open => "Super+,",
+    };
+}
+
+/// Load shortcut bindings with built-in fallback values.
+pub fn loadShortcuts(allocator: std.mem.Allocator) !std.ArrayList(ShortcutBinding) {
+    var bindings = std.ArrayList(ShortcutBinding).init(allocator);
+    errdefer freeShortcuts(allocator, &bindings);
+
+    const ordered_actions = [_]ShortcutAction{
+        .launcher_toggle,
+        .terminal_open,
+        .browser_open,
+        .files_open,
+        .settings_open,
+    };
+
+    for (ordered_actions) |action| {
+        try bindings.append(.{
+            .action = action,
+            .chord = try allocator.dupe(u8, defaultShortcutFor(action)),
+        });
+    }
+
+    const path = try shortcutsPath(allocator);
+    defer allocator.free(path);
+
+    var file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return bindings,
+        else => return err,
+    };
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 16 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line_raw| {
+        const line = std.mem.trim(u8, line_raw, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+
+        const eq_idx = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+        const key = std.mem.trim(u8, line[0..eq_idx], " \t\r");
+        const value = std.mem.trim(u8, line[eq_idx + 1 ..], " \t\r");
+        const action = ShortcutAction.fromString(key) orelse continue;
+        try setShortcutBinding(allocator, &bindings, action, value);
+    }
+
+    return bindings;
+}
+
+/// Replace one shortcut binding chord.
+pub fn setShortcutBinding(
+    allocator: std.mem.Allocator,
+    bindings: *std.ArrayList(ShortcutBinding),
+    action: ShortcutAction,
+    chord: []const u8,
+) !void {
+    for (bindings.items) |*binding| {
+        if (binding.action != action) continue;
+        allocator.free(binding.chord);
+        binding.chord = try allocator.dupe(u8, chord);
+        return;
+    }
+
+    try bindings.append(.{
+        .action = action,
+        .chord = try allocator.dupe(u8, chord),
+    });
+}
+
+/// Read shortcut chord for action.
+pub fn shortcutBinding(bindings: []const ShortcutBinding, action: ShortcutAction) []const u8 {
+    for (bindings) |binding| {
+        if (binding.action == action) return binding.chord;
+    }
+    return defaultShortcutFor(action);
+}
+
+/// Persist current shortcut bindings.
+pub fn saveShortcuts(allocator: std.mem.Allocator, bindings: []const ShortcutBinding) !void {
+    const path = try shortcutsPath(allocator);
+    defer allocator.free(path);
+
+    const dir_name = std.fs.path.dirname(path) orelse ".";
+    try std.fs.cwd().makePath(dir_name);
+
+    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
+    defer file.close();
+
+    const writer = file.writer();
+    try writer.writeAll("# LuminaDE shortcut bindings\n");
+    for (bindings) |binding| {
+        try writer.print("{s}={s}\n", .{ binding.action.asString(), binding.chord });
+    }
+}
+
+/// Free memory owned by shortcut bindings.
+pub fn freeShortcuts(allocator: std.mem.Allocator, bindings: *std.ArrayList(ShortcutBinding)) void {
+    for (bindings.items) |binding| {
+        allocator.free(binding.chord);
+    }
+    bindings.deinit();
+}
+
+/// Resolve stored language path (`LUMINADE_LANG_PATH` or default).
+pub fn langPath(allocator: std.mem.Allocator) ![]u8 {
+    if (std.posix.getenv("LUMINADE_LANG_PATH")) |value| {
+        return try allocator.dupe(u8, value);
+    }
+
+    return try allocator.dupe(u8, ".luminade/lang.conf");
+}
+
+/// Persist selected UI language to runtime storage.
+pub fn saveLang(allocator: std.mem.Allocator, lang: Lang) !void {
+    const path = try langPath(allocator);
+    defer allocator.free(path);
+
+    const dir_name = std.fs.path.dirname(path) orelse ".";
+    try std.fs.cwd().makePath(dir_name);
+
+    var file = try std.fs.cwd().createFile(path, .{ .truncate = true });
+    defer file.close();
+    try file.writer().print("{s}\n", .{@tagName(lang)});
+}
+
+fn loadLang(allocator: std.mem.Allocator) Lang {
+    if (std.posix.getenv("LUMINADE_LANG")) |env_value| {
+        return Lang.fromString(env_value);
+    }
+
+    const path = langPath(allocator) catch return .en;
+    defer allocator.free(path);
+
+    var file = std.fs.cwd().openFile(path, .{}) catch return .en;
+    defer file.close();
+
+    const content = file.readToEndAlloc(allocator, 128) catch return .en;
+    defer allocator.free(content);
+
+    const value = std.mem.trim(u8, content, " \t\r\n");
+    if (value.len == 0) return .en;
+    return Lang.fromString(value);
+}
+
+/// Parse common boolean strings (`1/true/yes/on`).
 pub fn parseBool(value: []const u8) bool {
     return std.mem.eql(u8, value, "1") or
         std.ascii.eqlIgnoreCase(value, "true") or
@@ -439,6 +1064,67 @@ pub fn parseBool(value: []const u8) bool {
         std.ascii.eqlIgnoreCase(value, "on");
 }
 
+fn localeFilePath(allocator: std.mem.Allocator, lang: Lang) ![]u8 {
+    if (std.posix.getenv("LUMINADE_LOCALES_DIR")) |dir| {
+        return try std.fmt.allocPrint(allocator, "{s}/{s}.json", .{ dir, @tagName(lang) });
+    }
+    return try std.fmt.allocPrint(allocator, "config/locales/{s}.json", .{@tagName(lang)});
+}
+
+/// Get localized string for `key` from language JSON, or `null` if missing.
+pub fn localeGet(allocator: std.mem.Allocator, lang: Lang, key: []const u8) !?[]u8 {
+    const path = try localeFilePath(allocator, lang);
+    defer allocator.free(path);
+
+    var file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return null,
+        else => return err,
+    };
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 256 * 1024);
+    defer allocator.free(content);
+
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, content, .{});
+    defer parsed.deinit();
+
+    if (parsed.value != .object) return null;
+    const value = parsed.value.object.get(key) orelse return null;
+    if (value != .string) return null;
+
+    return try allocator.dupe(u8, value.string);
+}
+
+/// Resolve localized value with explicit fallback text.
+pub fn localeGetOrFallback(
+    allocator: std.mem.Allocator,
+    lang: Lang,
+    key: []const u8,
+    fallback: []const u8,
+) ![]u8 {
+    const value = try localeGet(allocator, lang, key);
+    if (value) |resolved| return resolved;
+    return try allocator.dupe(u8, fallback);
+}
+
+/// Resolve localized value with EN fallback and finally key-name fallback.
+pub fn localeGetWithEnFallback(
+    allocator: std.mem.Allocator,
+    lang: Lang,
+    key: []const u8,
+) ![]u8 {
+    if (try localeGet(allocator, lang, key)) |resolved| {
+        return resolved;
+    }
+    if (lang != .en) {
+        if (try localeGet(allocator, .en, key)) |resolved_en| {
+            return resolved_en;
+        }
+    }
+    return try allocator.dupe(u8, key);
+}
+
+/// Built-in banner fallback strings used when locale file lookup fails.
 pub fn tr(kind: AppKind, lang: Lang) []const u8 {
     return switch (kind) {
         .panel => switch (lang) {
@@ -453,25 +1139,42 @@ pub fn tr(kind: AppKind, lang: Lang) []const u8 {
             .en => "Settings ready: configure desktop and system integration.",
             .pl => "Ustawienia gotowe: skonfiguruj pulpit i integrację z systemem.",
         },
+        .welcome => switch (lang) {
+            .en => "Welcome ready: complete first-run setup and explore LuminaDE.",
+            .pl => "Powitanie gotowe: skonfiguruj pierwszy start i poznaj LuminaDE.",
+        },
     };
 }
 
+/// Print startup banner for app kind using locale key lookup + fallback.
 pub fn printBanner(kind: AppKind, cfg: RuntimeConfig) void {
     std.debug.print("LuminaDE/{s} [{s}]\n", .{ kind.asString(), @tagName(cfg.lang) });
-    std.debug.print("{s}\n", .{tr(kind, cfg.lang)});
+
+    const key = switch (kind) {
+        .panel => "panel.ready",
+        .launcher => "launcher.ready",
+        .settings => "settings.ready",
+        .welcome => "welcome.ready",
+    };
+
+    const resolved = localeGet(cfg.allocator, cfg.lang, key) catch null;
+    defer if (resolved) |msg| cfg.allocator.free(msg);
+
+    std.debug.print("{s}\n", .{resolved orelse tr(kind, cfg.lang)});
 }
 
+/// Load runtime config (profile + language) from persisted files/env.
 pub fn loadRuntimeConfig(allocator: std.mem.Allocator) RuntimeConfig {
-    const env_value = std.posix.getenv("LUMINADE_LANG") orelse "en";
     const profile = DesktopProfile.load(allocator) catch DesktopProfile.fromEnv();
 
     return .{
         .allocator = allocator,
-        .lang = Lang.fromString(env_value),
+        .lang = loadLang(allocator),
         .profile = profile,
     };
 }
 
+/// Print concise runtime summary for diagnostics.
 pub fn printModernSummary(kind: AppKind, cfg: RuntimeConfig) void {
     std.debug.print(
         "Theme={s}, Density={s}, Motion={s}, Radius={d}, Blur={d}, Gaps={d}, WM={s}, Input={s}\n",
@@ -508,9 +1211,14 @@ pub fn printModernSummary(kind: AppKind, cfg: RuntimeConfig) void {
             "Settings mode=unified desktop+system control, natural-scroll={any}, tap-to-click={any}\n",
             .{ cfg.profile.natural_scroll, cfg.profile.tap_to_click },
         ),
+        .welcome => std.debug.print(
+            "Welcome mode=first-run onboarding, interaction={s}, launcher-width={d}\n",
+            .{ @tagName(cfg.profile.interaction_mode), cfg.profile.launcher_width },
+        ),
     }
 }
 
+/// Apply input profile via external tools (`riverctl`/fallback probes).
 pub fn applyInputProfile(allocator: std.mem.Allocator, profile: DesktopProfile, dry_run: bool) !InputApplyReport {
     const riverctl_probe = std.process.Child.run(.{
         .allocator = allocator,
@@ -603,6 +1311,64 @@ pub fn applyInputProfile(allocator: std.mem.Allocator, profile: DesktopProfile, 
         .skipped_count = skipped_count,
         .device_count = @as(u8, @intCast(@min(devices.items.len, std.math.maxInt(u8)))),
     };
+}
+
+/// Execute system action using prioritized command fallbacks.
+pub fn runSystemAction(allocator: std.mem.Allocator, action: SystemAction) !bool {
+    return switch (action) {
+        .lock_session => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "loginctl", "lock-session" },
+                &.{ "sh", "-lc", "command -v swaylock >/dev/null 2>&1 && swaylock" },
+            },
+        ),
+        .suspend => try runSystemCommandFallback(allocator, &.{&.{ "systemctl", "suspend" }}),
+        .logout => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "loginctl", "terminate-user", std.posix.getenv("USER") orelse "" },
+                &.{ "sh", "-lc", "pkill -KILL -u \"$USER\"" },
+            },
+        ),
+        .audio_volume_up => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+" },
+                &.{ "pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%" },
+            },
+        ),
+        .audio_volume_down => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-" },
+                &.{ "pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%" },
+            },
+        ),
+        .audio_mute_toggle => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle" },
+                &.{ "pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle" },
+            },
+        ),
+        .open_network => try runSystemCommandFallback(
+            allocator,
+            &.{
+                &.{ "nm-connection-editor" },
+                &.{ "nmtui" },
+                &.{ "iwgtk" },
+            },
+        ),
+    };
+}
+
+fn runSystemCommandFallback(allocator: std.mem.Allocator, candidates: []const []const []const u8) !bool {
+    for (candidates) |argv| {
+        if (argv.len == 0) continue;
+        if (try runCommandOk(allocator, argv)) return true;
+    }
+    return false;
 }
 
 fn effectiveProfileForDevice(
@@ -760,6 +1526,7 @@ fn runCommandOk(allocator: std.mem.Allocator, argv: []const []const u8) !bool {
     };
 }
 
+/// Load per-device input rules from TSV file.
 pub fn loadDeviceInputRules(allocator: std.mem.Allocator) !std.ArrayList(DeviceInputRule) {
     var rules = std.ArrayList(DeviceInputRule).init(allocator);
 
@@ -832,6 +1599,7 @@ pub fn loadDeviceInputRules(allocator: std.mem.Allocator) !std.ArrayList(DeviceI
     return rules;
 }
 
+/// Free memory owned by rules returned from `loadDeviceInputRules`.
 pub fn freeDeviceInputRules(allocator: std.mem.Allocator, rules: *std.ArrayList(DeviceInputRule)) void {
     for (rules.items) |rule| {
         allocator.free(rule.matcher);

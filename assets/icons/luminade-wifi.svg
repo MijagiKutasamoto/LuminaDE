@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">LuminaDE WiFi Icon</title>
+  <desc id="desc">Wireless signal symbol on rounded aurora tile.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#081520"/><stop offset="100%" stop-color="#18384d"/></linearGradient>
+    <linearGradient id="ac" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#5ae4ff"/><stop offset="100%" stop-color="#78ffc4"/></linearGradient>
+  </defs>
+  <rect x="20" y="20" width="216" height="216" rx="44" fill="url(#bg)"/>
+  <path d="M58 124c38-38 102-38 140 0" fill="none" stroke="url(#ac)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M82 148c25-25 67-25 92 0" fill="none" stroke="url(#ac)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M106 172c12-12 32-12 44 0" fill="none" stroke="url(#ac)" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="128" cy="198" r="9" fill="#86f7d1"/>
+</svg>

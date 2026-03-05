@@ -3,6 +3,7 @@ Type=Application
 Name=LuminaDE Session Supervisor
 Comment=Starts luminade-sessiond if not already running
 Exec=/usr/bin/luminade-session-autostart
+Icon=luminade-settings
 OnlyShowIn=LuminaDE;
 X-GNOME-Autostart-enabled=true
 NoDisplay=true

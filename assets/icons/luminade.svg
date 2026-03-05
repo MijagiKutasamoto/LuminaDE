@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">LuminaDE Logo</title>
+  <desc id="desc">Rounded diamond badge with layered aurora glow and L monogram.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07131f"/>
+      <stop offset="100%" stop-color="#123043"/>
+    </linearGradient>
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5ae4ff"/>
+      <stop offset="50%" stop-color="#4ac9ff"/>
+      <stop offset="100%" stop-color="#78ffc4"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="24" y="24" width="208" height="208" rx="58" fill="url(#bg)"/>
+  <path d="M56 84c22-28 52-42 88-42 20 0 39 5 56 15-19 7-35 20-47 37-13 20-20 42-20 65-32-5-56-21-73-49-5-8-9-17-12-26z" fill="#102536" opacity="0.85"/>
+  <path d="M80 64h28v128h88v24H80z" fill="url(#aurora)"/>
+  <rect x="24" y="24" width="208" height="208" rx="58" fill="none" stroke="#8ee9ff" stroke-opacity="0.28" stroke-width="4"/>
+</svg>

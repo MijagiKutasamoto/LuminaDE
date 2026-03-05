@@ -46,6 +46,16 @@ pub fn build(b: *std.Build) void {
     settings_exe.root_module.addImport("luminade_ui", ui_mod);
     b.installArtifact(settings_exe);
 
+    const welcome_exe = b.addExecutable(.{
+        .name = "luminade-welcome",
+        .root_source_file = b.path("apps/welcome/src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    welcome_exe.root_module.addImport("luminade_core", core_mod);
+    welcome_exe.root_module.addImport("luminade_ui", ui_mod);
+    b.installArtifact(welcome_exe);
+
     const sessiond_exe = b.addExecutable(.{
         .name = "luminade-sessiond",
         .root_source_file = b.path("apps/sessiond/src/main.zig"),
@@ -69,8 +79,14 @@ pub fn build(b: *std.Build) void {
     const run_settings_step = b.step("run-settings", "Run luminade-settings");
     run_settings_step.dependOn(&run_settings.step);
 
+    const run_welcome = b.addRunArtifact(welcome_exe);
+    if (b.args) |args| run_welcome.addArgs(args);
+    const run_welcome_step = b.step("run-welcome", "Run luminade-welcome");
+    run_welcome_step.dependOn(&run_welcome.step);
+
     const run_sessiond = b.addRunArtifact(sessiond_exe);
     if (b.args) |args| run_sessiond.addArgs(args);
     const run_sessiond_step = b.step("run-sessiond", "Run luminade-sessiond");
     run_sessiond_step.dependOn(&run_sessiond.step);
+
 }

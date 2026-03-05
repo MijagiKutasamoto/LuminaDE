@@ -30,14 +30,21 @@ const ManagedAppState = struct {
     last_exit_code: i32,
 };
 
+const PubSubSubscription = struct {
+    topic: []u8,
+    endpoint: []u8,
+};
+
 const panel_argv = [_][]const u8{ "luminade-panel" };
 const launcher_argv = [_][]const u8{ "luminade-launcher" };
 const settings_argv = [_][]const u8{ "luminade-settings" };
+const welcome_argv = [_][]const u8{ "luminade-welcome" };
 
 const apps = [_]ManagedAppDescriptor{
     .{ .name = "panel", .argv = panel_argv[0..], .autostart = true, .auto_restart = true, .max_restarts = 8, .restart_backoff_ms = 1200 },
     .{ .name = "launcher", .argv = launcher_argv[0..], .autostart = true, .auto_restart = true, .max_restarts = 8, .restart_backoff_ms = 1200 },
     .{ .name = "settings", .argv = settings_argv[0..], .autostart = false, .auto_restart = true, .max_restarts = 5, .restart_backoff_ms = 1500 },
+    .{ .name = "welcome", .argv = welcome_argv[0..], .autostart = true, .auto_restart = false, .max_restarts = 1, .restart_backoff_ms = 0 },
 };
 
 pub fn main() !void {
@@ -62,6 +69,15 @@ pub fn main() !void {
     }
 
     var states: [apps.len]ManagedAppState = undefined;
+    var subscriptions = std.ArrayList(PubSubSubscription).init(allocator);
+    defer {
+        for (subscriptions.items) |sub| {
+            allocator.free(sub.topic);
+            allocator.free(sub.endpoint);
+        }
+        subscriptions.deinit();
+    }
+
     const now_ms = std.time.milliTimestamp();
     for (apps, 0..) |desc, i| {
         states[i] = .{
@@ -89,8 +105,8 @@ pub fn main() !void {
     while (true) {
         const loop_now = std.time.milliTimestamp();
 
-        const should_shutdown_socket = try processSocketCommands(allocator, cmd_socket, &states);
-        const should_shutdown_queue = try processCommandQueue(allocator, &states);
+        const should_shutdown_socket = try processSocketCommands(allocator, cmd_socket, &states, &subscriptions);
+        const should_shutdown_queue = try processCommandQueue(allocator, &states, &subscriptions);
         const should_shutdown = should_shutdown_socket or should_shutdown_queue;
 
         try monitorApps(allocator, &states, loop_now);
@@ -260,6 +276,7 @@ fn processSocketCommands(
     allocator: std.mem.Allocator,
     socket_fd: std.posix.socket_t,
     states: *[apps.len]ManagedAppState,
+    subscriptions: *std.ArrayList(PubSubSubscription),
 ) !bool {
     var should_shutdown = false;
 
@@ -297,14 +314,18 @@ fn processSocketCommands(
         while (lines.next()) |line_raw| {
             const line = std.mem.trim(u8, line_raw, " \t\r");
             if (line.len == 0 or line[0] == '#') continue;
-            if (try processCommandLine(allocator, states, line)) should_shutdown = true;
+            if (try processCommandLine(allocator, states, subscriptions, line)) should_shutdown = true;
         }
     }
 
     return should_shutdown;
 }
 
-fn processCommandQueue(allocator: std.mem.Allocator, states: *[apps.len]ManagedAppState) !bool {
+fn processCommandQueue(
+    allocator: std.mem.Allocator,
+    states: *[apps.len]ManagedAppState,
+    subscriptions: *std.ArrayList(PubSubSubscription),
+) !bool {
     var file = std.fs.cwd().openFile(commandsPath(), .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => return err,
@@ -319,7 +340,7 @@ fn processCommandQueue(allocator: std.mem.Allocator, states: *[apps.len]ManagedA
     while (lines.next()) |line_raw| {
         const line = std.mem.trim(u8, line_raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
-        if (try processCommandLine(allocator, states, line)) shutdown = true;
+        if (try processCommandLine(allocator, states, subscriptions, line)) shutdown = true;
     }
 
     var clear = try std.fs.cwd().createFile(commandsPath(), .{ .truncate = true });
@@ -332,6 +353,7 @@ fn processCommandQueue(allocator: std.mem.Allocator, states: *[apps.len]ManagedA
 fn processCommandLine(
     allocator: std.mem.Allocator,
     states: *[apps.len]ManagedAppState,
+    subscriptions: *std.ArrayList(PubSubSubscription),
     line: []const u8,
 ) !bool {
     var fields = std.ArrayList([]const u8).init(allocator);
@@ -373,7 +395,89 @@ fn processCommandLine(
         return false;
     }
 
+    if (std.mem.eql(u8, cmd, "SUB") and args.len >= 2) {
+        try subscribeTopic(allocator, subscriptions, args[0], args[1]);
+        return false;
+    }
+
+    if (std.mem.eql(u8, cmd, "UNSUB") and args.len >= 2) {
+        unsubscribeTopic(subscriptions, args[0], args[1]);
+        return false;
+    }
+
+    if (std.mem.eql(u8, cmd, "PUB") and args.len >= 2) {
+        const payload = if (args.len > 2) args[2..] else &.{};
+        try publishTopic(allocator, subscriptions, args[0], args[1], payload);
+        return false;
+    }
+
     return false;
+}
+
+fn subscribeTopic(
+    allocator: std.mem.Allocator,
+    subscriptions: *std.ArrayList(PubSubSubscription),
+    topic: []const u8,
+    endpoint: []const u8,
+) !void {
+    for (subscriptions.items) |sub| {
+        if (std.mem.eql(u8, sub.topic, topic) and std.mem.eql(u8, sub.endpoint, endpoint)) return;
+    }
+
+    try subscriptions.append(.{
+        .topic = try allocator.dupe(u8, topic),
+        .endpoint = try allocator.dupe(u8, endpoint),
+    });
+}
+
+fn unsubscribeTopic(
+    subscriptions: *std.ArrayList(PubSubSubscription),
+    topic: []const u8,
+    endpoint: []const u8,
+) void {
+    var idx: usize = 0;
+    while (idx < subscriptions.items.len) {
+        const sub = subscriptions.items[idx];
+        if (!std.mem.eql(u8, sub.topic, topic) or !std.mem.eql(u8, sub.endpoint, endpoint)) {
+            idx += 1;
+            continue;
+        }
+
+        const removed = subscriptions.swapRemove(idx);
+        const allocator = subscriptions.allocator;
+        allocator.free(removed.topic);
+        allocator.free(removed.endpoint);
+    }
+}
+
+fn publishTopic(
+    allocator: std.mem.Allocator,
+    subscriptions: *std.ArrayList(PubSubSubscription),
+    topic: []const u8,
+    event_name: []const u8,
+    payload_fields: []const []const u8,
+) !void {
+    var line = std.ArrayList(u8).init(allocator);
+    defer line.deinit();
+
+    try line.writer().print("{s}\t{s}", .{ topic, event_name });
+    for (payload_fields) |part| {
+        try line.append('\t');
+        try line.appendSlice(part);
+    }
+
+    for (subscriptions.items) |sub| {
+        if (!std.mem.eql(u8, sub.topic, topic)) continue;
+        _ = sendDatagramToPath(sub.endpoint, line.items) catch continue;
+    }
+}
+
+fn sendDatagramToPath(path: []const u8, payload: []const u8) !usize {
+    const fd = try std.posix.socket(std.posix.AF.UNIX, std.posix.SOCK.DGRAM | std.posix.SOCK.CLOEXEC, 0);
+    defer std.posix.close(fd);
+
+    const addr = try std.net.Address.initUnix(path);
+    return try std.posix.sendto(fd, payload, 0, &addr.any, addr.getOsSockLen());
 }
 
 fn startNamedApp(allocator: std.mem.Allocator, states: *[apps.len]ManagedAppState, name: []const u8) !void {

@@ -3,6 +3,19 @@
 ## Cel
 Zapewnić nowoczesny wygląd i zachowanie środowiska: szybkie, płynne, przewidywalne, keyboard-first, ale przyjazne też dla myszy i touchpada.
 
+## Referencja wizualna (03.2026)
+Docelowy kierunek wyglądu dla v0.5+ jest oparty o mockupy:
+- `Gemini_Generated_Image_gbpm1zgbpm1zgbpm.png`
+- `Gemini_Generated_Image_hd4otahd4otahd4o.png`
+
+Te dwa obrazy są źródłem prawdy dla proporcji, atmosfery i warstwowości UI.
+
+## Profil wizualny "Aurora Glass"
+- Ciemna baza z wyraźnymi, jasnymi warstwami foreground.
+- Większe promienie i bardziej "miękki" kontur komponentów.
+- Większa separacja sekcji (więcej oddechu między panelami i listami).
+- Delikatnie wyższy blur dla elementów overlay (launcher, dialogi, settings).
+
 ## Zasady UX
 - Domyślny motyw: dark, wysoki kontrast, czytelna typografia.
 - Spójna siatka spacingu i zaokrągleń między panelem, launcherem i ustawieniami.
@@ -11,18 +24,19 @@ Zapewnić nowoczesny wygląd i zachowanie środowiska: szybkie, płynne, przewid
 - Mouse-first + keyboard parity: mysz/touchpad są pierwszorzędne, a wszystkie kluczowe akcje nadal dostępne z klawiatury.
 
 ## Panel
-- Wysokość 36 px (domyślnie), modułowy układ.
+- Wysokość 42 px (domyślnie), modułowy układ i większe hitboxy.
 - Czytelne workspace indicators i status systemowy.
 - Opcjonalny smart-hide dla małych ekranów.
 
 ## Launcher
-- Centralny overlay, szybkie fuzzy search.
+- Centralny overlay-card, szybkie fuzzy search.
 - Sekcje: aplikacje, polecenia, pliki, ostatnie.
 - Priorytet wyników na bazie historii użycia.
 - Ranking i domyślna liczba wyników adaptowane do `interaction_mode` (mouse/balanced/keyboard).
 
 ## Ustawienia
 - Jedno centrum konfiguracji desktop + system.
+- Dwukolumnowy layout kart (lewa: konfiguracja, prawa: akcje systemowe) spójny z panelem i launcherem.
 - Moduły MVP: Wygląd, Ekrany, Wejście, Skróty.
 - Tryb zarządzania oknami: `tiling` / `floating` / `hybrid`.
 - Tryb interakcji: `mouse_first` / `balanced` / `keyboard_first`.

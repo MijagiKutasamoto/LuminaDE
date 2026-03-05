@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Logical surface role used by shared UI/runtime helpers.
 pub const SurfaceRole = enum {
     panel,
     launcher,
     settings,
 };
 
+/// Window decoration capability flags for a surface.
 pub const WindowDecoration = struct {
     enabled: bool,
     titlebar_height: u8,
@@ -13,6 +15,7 @@ pub const WindowDecoration = struct {
     shadow: bool,
 };
 
+/// Theme token set consumed by layout and diagnostics.
 pub const ThemeTokens = struct {
     corner_radius: u8,
     spacing_unit: u8,
@@ -20,13 +23,44 @@ pub const ThemeTokens = struct {
 
     pub fn modernDefault() ThemeTokens {
         return .{
-            .corner_radius = 12,
-            .spacing_unit = 8,
-            .blur_sigma = 14,
+            .corner_radius = 18,
+            .spacing_unit = 10,
+            .blur_sigma = 20,
         };
     }
 };
 
+/// Themed decoration metrics used by fullscreen surface builders.
+pub const SurfaceDecorationTheme = struct {
+    corner_radius: u8,
+    launcher_titlebar_height: u8,
+    settings_titlebar_height: u8,
+    shadow_enabled: bool,
+
+    pub fn modernDefault() SurfaceDecorationTheme {
+        return .{
+            .corner_radius = 18,
+            .launcher_titlebar_height = 42,
+            .settings_titlebar_height = 44,
+            .shadow_enabled = true,
+        };
+    }
+
+    pub fn fromThemeTokens(tokens: ThemeTokens) SurfaceDecorationTheme {
+        const base_titlebar = @as(i32, @intCast(tokens.spacing_unit)) * 4 + 4;
+        const launcher_h = @as(u8, @intCast(@max(@as(i32, 34), @min(@as(i32, 64), base_titlebar))));
+        const settings_h = @as(u8, @intCast(@max(@as(i32, 36), @min(@as(i32, 68), base_titlebar + 2))));
+
+        return .{
+            .corner_radius = tokens.corner_radius,
+            .launcher_titlebar_height = launcher_h,
+            .settings_titlebar_height = settings_h,
+            .shadow_enabled = true,
+        };
+    }
+};
+
+/// Surface description independent from a specific renderer backend.
 pub const SurfaceSpec = struct {
     role: SurfaceRole,
     app_id: []const u8,
@@ -39,6 +73,7 @@ pub const SurfaceSpec = struct {
     decoration: WindowDecoration,
 };
 
+/// Output/monitor profile used for per-output rendering.
 pub const OutputProfile = struct {
     name: []const u8,
     width: u16,
@@ -47,6 +82,7 @@ pub const OutputProfile = struct {
     primary: bool,
 };
 
+/// Derived render-space information (physical + logical dimensions).
 pub const RenderSpec = struct {
     output_name: []const u8,
     physical_width: u16,
@@ -56,6 +92,7 @@ pub const RenderSpec = struct {
     logical_height: u16,
 };
 
+/// Supported logical widget kinds in GuiFrame.
 pub const WidgetKind = enum {
     row,
     column,
@@ -68,6 +105,7 @@ pub const WidgetKind = enum {
     toggle,
 };
 
+/// Declarative widget record for GUI-first frame output.
 pub const GuiWidget = struct {
     id: []const u8,
     kind: WidgetKind,
@@ -77,6 +115,50 @@ pub const GuiWidget = struct {
     hoverable: bool,
 };
 
+/// Parsed representation of `icon:<name> <text>` labels.
+pub const IconLabel = struct {
+    icon_name: ?[]const u8,
+    text: []const u8,
+};
+
+/// Mouse button abstraction for normalized UI events.
+pub const PointerButton = enum {
+    left,
+    middle,
+    right,
+    other,
+};
+
+/// Pointer motion payload in surface-local coordinates.
+pub const PointerMotionEvent = struct {
+    x: i32,
+    y: i32,
+};
+
+/// Pointer button payload in surface-local coordinates.
+pub const PointerButtonEvent = struct {
+    button: PointerButton,
+    pressed: bool,
+    x: i32,
+    y: i32,
+};
+
+/// Pointer scroll payload with optional cursor coordinates.
+pub const PointerScrollEvent = struct {
+    delta_x: i32,
+    delta_y: i32,
+    x: i32,
+    y: i32,
+};
+
+/// Minimal normalized UI event model (skeleton for native adapters).
+pub const UiEvent = union(enum) {
+    pointer_motion: PointerMotionEvent,
+    pointer_button: PointerButtonEvent,
+    pointer_scroll: PointerScrollEvent,
+};
+
+/// A full UI frame for one app surface and output.
 pub const GuiFrame = struct {
     title: []const u8,
     surface: SurfaceSpec,
@@ -95,17 +177,20 @@ pub const GuiFrame = struct {
     }
 };
 
+/// Titlebar button kinds.
 pub const DecorationButtonKind = enum {
     close,
     maximize,
     minimize,
 };
 
+/// Single decoration button geometry.
 pub const DecorationButton = struct {
     kind: DecorationButtonKind,
     rect: Rect,
 };
 
+/// Computed titlebar/drag/button layout for decorated windows.
 pub const DecorationLayout = struct {
     enabled: bool,
     title: []const u8,
@@ -114,11 +199,13 @@ pub const DecorationLayout = struct {
     buttons: [3]DecorationButton,
 };
 
+/// Native panel backend mode.
 pub const NativePanelBackend = enum {
     layer_shell,
     fallback,
 };
 
+/// Runtime descriptor for one native panel target output.
 pub const NativePanelSession = struct {
     backend: NativePanelBackend,
     output_name: []const u8,
@@ -129,10 +216,12 @@ pub const NativePanelSession = struct {
     wayland_display: ?[]const u8,
 };
 
+/// Mutable state for native panel commit retries/throttling.
 pub const NativePanelRuntime = struct {
     next_native_attempt_ns: i64,
     native_failure_count: u8,
     native_protocol_error_streak: u8,
+    native_ever_succeeded: bool,
     circuit_open_until_ns: i64,
     last_fallback_write_ns: i64,
     last_frame_fingerprint: u64,
@@ -145,6 +234,7 @@ pub const NativePanelRuntime = struct {
             .next_native_attempt_ns = 0,
             .native_failure_count = 0,
             .native_protocol_error_streak = 0,
+            .native_ever_succeeded = false,
             .circuit_open_until_ns = 0,
             .last_fallback_write_ns = 0,
             .last_frame_fingerprint = 0,
@@ -155,17 +245,120 @@ pub const NativePanelRuntime = struct {
     }
 };
 
+/// Logical texture handle stored in `TextureCache`.
+pub const TextureHandle = struct {
+    id: u64,
+    source_path: []u8,
+    scale: f32,
+    width: u16,
+    height: u16,
+};
+
+/// In-memory texture metadata cache.
+///
+/// This skeleton does not decode pixels yet; it only tracks unique handles
+/// per `path+scale` key and validates source existence.
+pub const TextureCache = struct {
+    allocator: std.mem.Allocator,
+    entries: std.StringHashMap(TextureHandle),
+    next_id: u64,
+
+    /// Initialize empty cache.
+    pub fn init(allocator: std.mem.Allocator) TextureCache {
+        return .{
+            .allocator = allocator,
+            .entries = std.StringHashMap(TextureHandle).init(allocator),
+            .next_id = 1,
+        };
+    }
+
+    /// Release all cache keys and texture handle paths.
+    pub fn deinit(self: *TextureCache) void {
+        self.clear();
+        self.entries.deinit();
+    }
+
+    /// Get cached texture handle by source path and scale.
+    pub fn get(self: *TextureCache, source_path: []const u8, scale: f32) ?TextureHandle {
+        const key = makeTextureKey(self.allocator, source_path, scale) catch return null;
+        defer self.allocator.free(key);
+        return self.entries.get(key);
+    }
+
+    /// Get cached handle or create new one if source exists.
+    pub fn getOrLoad(self: *TextureCache, source_path: []const u8, scale: f32) !TextureHandle {
+        const key = try makeTextureKey(self.allocator, source_path, scale);
+
+        if (self.entries.get(key)) |cached| {
+            self.allocator.free(key);
+            return cached;
+        }
+
+        if (!pathExists(source_path)) {
+            self.allocator.free(key);
+            return error.TextureSourceMissing;
+        }
+
+        var handle = TextureHandle{
+            .id = self.next_id,
+            .source_path = try self.allocator.dupe(u8, source_path),
+            .scale = scale,
+            .width = 0,
+            .height = 0,
+        };
+        self.next_id += 1;
+
+        try self.entries.put(key, handle);
+        return handle;
+    }
+
+    /// Remove all cached entries for a given source path.
+    pub fn invalidatePath(self: *TextureCache, source_path: []const u8) void {
+        var keys_to_remove = std.ArrayList([]u8).init(self.allocator);
+        defer {
+            for (keys_to_remove.items) |k| self.allocator.free(k);
+            keys_to_remove.deinit();
+        }
+
+        var it = self.entries.iterator();
+        while (it.next()) |item| {
+            if (!std.mem.eql(u8, item.value_ptr.source_path, source_path)) continue;
+            keys_to_remove.append(self.allocator.dupe(u8, item.key_ptr.*) catch continue) catch continue;
+        }
+
+        for (keys_to_remove.items) |k| {
+            if (self.entries.fetchRemove(k)) |kv| {
+                self.allocator.free(kv.key);
+                self.allocator.free(kv.value.source_path);
+            }
+        }
+    }
+
+    /// Remove all cached texture handles.
+    pub fn clear(self: *TextureCache) void {
+        var it = self.entries.iterator();
+        while (it.next()) |item| {
+            self.allocator.free(item.key_ptr.*);
+            self.allocator.free(item.value_ptr.source_path);
+        }
+        self.entries.clearRetainingCapacity();
+    }
+};
+
+/// High-level window layout mode.
 pub const LayoutMode = enum {
     tiling,
     floating,
     hybrid,
 };
 
+/// Algorithm used for tiled windows.
 pub const LayoutAlgorithm = enum {
     master_stack,
     grid,
 };
 
+/// Basic rectangle geometry.
 pub const Rect = struct {
     x: i32,
     y: i32,
@@ -173,6 +366,7 @@ pub const Rect = struct {
     h: u16,
 };
 
+/// Managed window record used by `applyWindowLayout`.
 pub const WindowState = struct {
     id: []const u8,
     role: SurfaceRole,
@@ -185,6 +379,7 @@ pub const WindowState = struct {
     z_index: i32,
 };
 
+/// Layout knobs used by tiling/floating/hybrid placement.
 pub const LayoutConfig = struct {
     spacing: u8,
     outer_gap: u8,
@@ -203,10 +398,143 @@ pub const LayoutConfig = struct {
     }
 };
 
+/// Append widget to frame widget list.
 pub fn addWidget(frame: *GuiFrame, widget: GuiWidget) !void {
     try frame.widgets.append(widget);
 }
 
+/// Parse icon-prefixed label into icon-name + text payload.
+pub fn parseIconLabel(label: []const u8) IconLabel {
+    const prefix = "icon:";
+    if (!std.mem.startsWith(u8, label, prefix)) {
+        return .{ .icon_name = null, .text = label };
+    }
+
+    const rest = label[prefix.len..];
+    const split_idx = std.mem.indexOfScalar(u8, rest, ' ') orelse {
+        if (rest.len == 0) return .{ .icon_name = null, .text = label };
+        return .{ .icon_name = rest, .text = "" };
+    };
+
+    const icon_name = rest[0..split_idx];
+    if (icon_name.len == 0) return .{ .icon_name = null, .text = label };
+
+    const text = if (split_idx + 1 >= rest.len) "" else rest[split_idx + 1 ..];
+    return .{ .icon_name = icon_name, .text = text };
+}
+
+/// Compose label in `icon:<name> <text>` convention.
+pub fn composeIconLabel(allocator: std.mem.Allocator, icon_name: []const u8, text: []const u8) ![]u8 {
+    const resolved_icon = if (icon_name.len == 0) "luminade" else icon_name;
+    return try std.fmt.allocPrint(allocator, "icon:{s} {s}", .{ resolved_icon, text });
+}
+
+/// Parse one TSV line into a normalized `UiEvent`.
+///
+/// Supported forms:
+/// - `motion\t<x>\t<y>`
+/// - `button\t<left|middle|right|other>\t<press|release>\t<x>\t<y>`
+/// - `scroll\t<dx>\t<dy>\t<x>\t<y>`
+pub fn parseUiEventTsvLine(line_raw: []const u8) ?UiEvent {
+    const line = std.mem.trim(u8, line_raw, " \t\r");
+    if (line.len == 0 or line[0] == '#') return null;
+
+    var parts: [8][]const u8 = undefined;
+    var part_count: usize = 0;
+
+    var split = std.mem.splitScalar(u8, line, '\t');
+    while (split.next()) |raw| {
+        const part = std.mem.trim(u8, raw, " \t\r");
+        if (part.len == 0) continue;
+        if (part_count >= parts.len) break;
+        parts[part_count] = part;
+        part_count += 1;
+    }
+    if (part_count == 0) return null;
+
+    if (std.mem.eql(u8, parts[0], "motion") and part_count >= 3) {
+        const x = std.fmt.parseInt(i32, parts[1], 10) catch return null;
+        const y = std.fmt.parseInt(i32, parts[2], 10) catch return null;
+        return UiEvent{ .pointer_motion = .{ .x = x, .y = y } };
+    }
+
+    if (std.mem.eql(u8, parts[0], "button") and part_count >= 5) {
+        const button = parsePointerButton(parts[1]) orelse return null;
+        const pressed = parsePointerAction(parts[2]) orelse return null;
+        const x = std.fmt.parseInt(i32, parts[3], 10) catch return null;
+        const y = std.fmt.parseInt(i32, parts[4], 10) catch return null;
+        return UiEvent{ .pointer_button = .{ .button = button, .pressed = pressed, .x = x, .y = y } };
+    }
+
+    if (std.mem.eql(u8, parts[0], "scroll") and part_count >= 5) {
+        const dx = std.fmt.parseInt(i32, parts[1], 10) catch return null;
+        const dy = std.fmt.parseInt(i32, parts[2], 10) catch return null;
+        const x = std.fmt.parseInt(i32, parts[3], 10) catch return null;
+        const y = std.fmt.parseInt(i32, parts[4], 10) catch return null;
+        return UiEvent{ .pointer_scroll = .{ .delta_x = dx, .delta_y = dy, .x = x, .y = y } };
+    }
+
+    return null;
+}
+
+/// Load normalized UI events from TSV file using `parseUiEventTsvLine`.
+pub fn loadUiEventsFromTsv(
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    max_events: usize,
+) !std.ArrayList(UiEvent) {
+    var events = std.ArrayList(UiEvent).init(allocator);
+
+    var file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return events,
+        else => return err,
+    };
+    defer file.close();
+
+    const content = try file.readToEndAlloc(allocator, 256 * 1024);
+    defer allocator.free(content);
+
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line_raw| {
+        if (events.items.len >= max_events) break;
+        const event = parseUiEventTsvLine(line_raw) orelse continue;
+        try events.append(event);
+    }
+
+    return events;
+}
+
+fn parsePointerButton(value: []const u8) ?PointerButton {
+    if (std.mem.eql(u8, value, "left")) return .left;
+    if (std.mem.eql(u8, value, "middle")) return .middle;
+    if (std.mem.eql(u8, value, "right")) return .right;
+    if (std.mem.eql(u8, value, "other")) return .other;
+    return null;
+}
+
+fn parsePointerAction(value: []const u8) ?bool {
+    if (std.mem.eql(u8, value, "press") or std.mem.eql(u8, value, "down")) return true;
+    if (std.mem.eql(u8, value, "release") or std.mem.eql(u8, value, "up")) return false;
+    return null;
+}
+
+fn makeTextureKey(allocator: std.mem.Allocator, source_path: []const u8, scale: f32) ![]u8 {
+    return std.fmt.allocPrint(allocator, "{s}@{d:.3}", .{ source_path, scale });
+}
+
+fn pathExists(path: []const u8) bool {
+    if (std.fs.path.isAbsolute(path)) {
+        const file = std.fs.openFileAbsolute(path, .{}) catch return false;
+        file.close();
+        return true;
+    }
+
+    const file = std.fs.cwd().openFile(path, .{}) catch return false;
+    file.close();
+    return true;
+}
+
+/// Compute titlebar/button layout for a given surface spec.
 pub fn decorationLayoutForSurface(spec: SurfaceSpec) DecorationLayout {
     if (!spec.decoration.enabled) {
         return .{
@@ -252,6 +580,7 @@ pub fn decorationLayoutForSurface(spec: SurfaceSpec) DecorationLayout {
     };
 }
 
+/// Print full frame in debug-friendly text form.
 pub fn printGuiFrame(frame: *const GuiFrame) void {
     std.debug.print(
         "[gui] frame='{s}' role={s} output={s} size={d}x{d} widgets={d}\n",
@@ -269,8 +598,9 @@ pub fn printGuiFrame(frame: *const GuiFrame) void {
     printDecorationLayout(decor);
 
     for (frame.widgets.items) |widget| {
+        const icon_label = parseIconLabel(widget.label);
         std.debug.print(
-            "  [widget] id={s} kind={s} rect=({d},{d},{d}x{d}) interactive={any} hoverable={any} label='{s}'\n",
+            "  [widget] id={s} kind={s} rect=({d},{d},{d}x{d}) interactive={any} hoverable={any} label='{s}'",
             .{
                 widget.id,
                 @tagName(widget.kind),
@@ -283,9 +613,16 @@ pub fn printGuiFrame(frame: *const GuiFrame) void {
                 widget.label,
             },
         );
+
+        if (icon_label.icon_name) |icon_name| {
+            std.debug.print(" icon={s} text='{s}'\n", .{ icon_name, icon_label.text });
+        } else {
+            std.debug.print("\n", .{});
+        }
     }
 }
 
+/// Print decoration layout details for diagnostics.
 pub fn printDecorationLayout(layout: DecorationLayout) void {
     if (!layout.enabled) {
         std.debug.print("  [decor] disabled\n", .{});
@@ -315,6 +652,7 @@ pub fn printDecorationLayout(layout: DecorationLayout) void {
     }
 }
 
+/// Initialize native panel session descriptor for one output.
 pub fn initNativePanelSession(
     allocator: std.mem.Allocator,
     output: OutputProfile,
@@ -337,6 +675,7 @@ pub fn initNativePanelSession(
     };
 }
 
+/// Commit panel frame to native backend, with fallback write path.
 pub fn commitNativePanelFrame(
     allocator: std.mem.Allocator,
     runtime: *NativePanelRuntime,
@@ -345,10 +684,16 @@ pub fn commitNativePanelFrame(
 ) !void {
     const now_ns = std.time.nanoTimestamp();
     const fingerprint = computePanelFrameFingerprint(session, frame);
+    const native_required = isNativePanelRequired();
+    const native_primary = isNativePanelPrimary();
+
+    if (native_required and (session.backend != .layer_shell or session.runtime_dir == null or session.wayland_display == null)) {
+        return error.NativePanelRequired;
+    }
 
     if (session.backend == .layer_shell and session.runtime_dir != null and session.wayland_display != null) {
         if (canAttemptNativeCommit(runtime, now_ns)) {
-            const native_ok = tryLayerShellNativeCommit(allocator, session, frame) catch |err| {
+            const native_ok = tryLayerShellNativeCommit(allocator, runtime, session, frame) catch |err| {
                 markNativeProtocolError(runtime, now_ns);
                 logNativeEvent(
                     runtime,
@@ -389,12 +734,23 @@ pub fn commitNativePanelFrame(
         }
     }
 
+    // Once native succeeds at least once, keep native as primary path and avoid bridge fallback churn.
+    if (native_primary and runtime.native_ever_succeeded and session.backend == .layer_shell) {
+        return;
+    }
+
+    if (native_required) {
+        return error.NativePanelRequired;
+    }
+
     if (!shouldWriteFallback(runtime, now_ns, fingerprint)) return;
     runtime.last_fallback_write_ns = now_ns;
     runtime.last_frame_fingerprint = fingerprint;
     runtime.has_last_frame_fingerprint = true;
 
-    const state_path = std.posix.getenv("LUMINADE_NATIVE_PANEL_STATE") orelse ".luminade/native-panel-state.tsv";
+    const state_path = try resolveNativePanelStatePath(allocator, session.output_name);
+    defer allocator.free(state_path);
+
     const parent = std.fs.path.dirname(state_path) orelse ".";
     try std.fs.cwd().makePath(parent);
 
@@ -413,11 +769,22 @@ pub fn commitNativePanelFrame(
     try writer.print("runtime_dir\t{s}\n", .{session.runtime_dir orelse ""});
     try writer.print("wayland_display\t{s}\n", .{session.wayland_display orelse ""});
     try writer.print("widgets\t{d}\n", .{frame.widgets.items.len});
+    try writer.writeAll("# widget\tid\tkind\tx\ty\tw\th\ticon\ttext\n");
 
     for (frame.widgets.items) |widget| {
+        const icon_label = parseIconLabel(widget.label);
         try writer.print(
-            "widget\t{s}\t{s}\t{d}\t{d}\t{d}\t{d}\n",
-            .{ widget.id, @tagName(widget.kind), widget.rect.x, widget.rect.y, widget.rect.w, widget.rect.h },
+            "widget\t{s}\t{s}\t{d}\t{d}\t{d}\t{d}\t{s}\t{s}\n",
+            .{
+                widget.id,
+                @tagName(widget.kind),
+                widget.rect.x,
+                widget.rect.y,
+                widget.rect.w,
+                widget.rect.h,
+                icon_label.icon_name orelse "",
+                icon_label.text,
+            },
         );
     }
 
@@ -432,6 +799,16 @@ pub fn commitNativePanelFrame(
     );
 }
 
+fn isNativePanelRequired() bool {
+    const env = std.posix.getenv("LUMINADE_NATIVE_PANEL_REQUIRED") orelse return false;
+    return std.mem.eql(u8, env, "1") or std.mem.eql(u8, env, "true") or std.mem.eql(u8, env, "on");
+}
+
+fn isNativePanelPrimary() bool {
+    const env = std.posix.getenv("LUMINADE_NATIVE_PANEL_PRIMARY") orelse return true;
+    return std.mem.eql(u8, env, "1") or std.mem.eql(u8, env, "true") or std.mem.eql(u8, env, "on");
+}
+
 fn canAttemptNativeCommit(runtime: *const NativePanelRuntime, now_ns: i64) bool {
     return now_ns >= runtime.next_native_attempt_ns and now_ns >= runtime.circuit_open_until_ns;
 }
@@ -440,6 +817,7 @@ fn markNativeSuccess(runtime: *NativePanelRuntime, now_ns: i64, fingerprint: u64
     runtime.next_native_attempt_ns = now_ns;
     runtime.native_failure_count = 0;
     runtime.native_protocol_error_streak = 0;
+    runtime.native_ever_succeeded = true;
     runtime.circuit_open_until_ns = 0;
     runtime.last_frame_fingerprint = fingerprint;
     runtime.has_last_frame_fingerprint = true;
@@ -518,8 +896,14 @@ fn computePanelFrameFingerprint(session: NativePanelSession, frame: *const GuiFr
     hashU8(&hasher, session.panel_height);
 
     for (frame.widgets.items) |widget| {
+        const icon_label = parseIconLabel(widget.label);
         hasher.update(widget.id);
         hasher.update(@tagName(widget.kind));
+        hasher.update(widget.label);
+        if (icon_label.icon_name) |icon_name| {
+            hasher.update(icon_name);
+        }
+        hasher.update(icon_label.text);
         hashI32(&hasher, widget.rect.x);
         hashI32(&hasher, widget.rect.y);
         hashU16(&hasher, widget.rect.w);
@@ -527,6 +911,38 @@ fn computePanelFrameFingerprint(session: NativePanelSession, frame: *const GuiFr
     }
 
     return hasher.final();
+}
+
+fn resolveNativePanelStatePath(allocator: std.mem.Allocator, output_name: []const u8) ![]u8 {
+    const sanitized_output = try sanitizeFileSegment(allocator, output_name);
+    defer allocator.free(sanitized_output);
+
+    if (std.posix.getenv("LUMINADE_NATIVE_PANEL_STATE")) |template| {
+        const marker = "{output}";
+        if (std.mem.indexOf(u8, template, marker)) |idx| {
+            const prefix = template[0..idx];
+            const suffix = template[idx + marker.len ..];
+            return try std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ prefix, sanitized_output, suffix });
+        }
+        return try allocator.dupe(u8, template);
+    }
+
+    return try std.fmt.allocPrint(allocator, ".luminade/native-panel-state-{s}.tsv", .{sanitized_output});
+}
+
+fn sanitizeFileSegment(allocator: std.mem.Allocator, raw: []const u8) ![]u8 {
+    if (raw.len == 0) return try allocator.dupe(u8, "unknown");
+
+    var out = std.ArrayList(u8).init(allocator);
+    defer out.deinit();
+
+    for (raw) |c| {
+        const safe = std.ascii.isAlphanumeric(c) or c == '-' or c == '_' or c == '.';
+        try out.append(if (safe) c else '_');
+    }
+
+    if (out.items.len == 0) try out.appendSlice("unknown");
+    return try out.toOwnedSlice();
 }
 
 fn hashU8(hasher: *std.hash.Wyhash, value: u8) void {
@@ -554,6 +970,7 @@ const RegistryGlobals = struct {
 
 fn tryLayerShellNativeCommit(
     allocator: std.mem.Allocator,
+    runtime: *NativePanelRuntime,
     session: NativePanelSession,
     frame: *const GuiFrame,
 ) !bool {
@@ -574,16 +991,20 @@ fn tryLayerShellNativeCommit(
     const globals = try readRegistryGlobalsUntilDone(allocator, &stream, registry_id, callback_id);
     if (globals.compositor_name == null or globals.layer_shell_name == null) return false;
 
-    const smoke_create = shouldRunLayerShellSmokeCreate();
-    if (smoke_create) {
-        try runLayerShellSmokeCreate(allocator, &stream, session, globals, frame);
-    }
+    // Native commit must perform a real surface lifecycle. Registry-only probe is not counted as success.
+    const allow_surface_commit = shouldRunLayerShellSmokeCreate(runtime);
+    if (!allow_surface_commit) return false;
+
+    try runLayerShellSmokeCreate(allocator, &stream, session, globals, frame);
 
     return true;
 }
 
-fn shouldRunLayerShellSmokeCreate() bool {
+fn shouldRunLayerShellSmokeCreate(runtime: *NativePanelRuntime) bool {
     const env = std.posix.getenv("LUMINADE_LAYER_SHELL_SMOKE_CREATE") orelse return true;
+    if (std.mem.eql(u8, env, "always")) return true;
+    // Backward-compatible: native commit still needs real surface commit each frame.
+    if (std.mem.eql(u8, env, "once")) return true;
     return std.mem.eql(u8, env, "1") or std.mem.eql(u8, env, "true") or std.mem.eql(u8, env, "on");
 }
 
@@ -600,6 +1021,7 @@ fn runLayerShellSmokeCreate(
     const layer_shell_id: u32 = 5;
     const wl_surface_id: u32 = 6;
     const layer_surface_id: u32 = 7;
+    const configure_sync_callback_id: u32 = 8;
 
     try sendRegistryBind(allocator, stream, 2, globals.compositor_name.?, "wl_compositor", @min(globals.compositor_version, 6), compositor_id);
     try sendRegistryBind(allocator, stream, 2, globals.layer_shell_name.?, "zwlr_layer_shell_v1", @min(globals.layer_shell_version, 4), layer_shell_id);
@@ -609,6 +1031,16 @@ fn runLayerShellSmokeCreate(
     try sendLayerSurfaceSetSize(allocator, stream, layer_surface_id, 0, session.panel_height);
     try sendLayerSurfaceSetAnchor(allocator, stream, layer_surface_id, layerAnchorTopLeftRight());
     try sendLayerSurfaceSetExclusiveZone(allocator, stream, layer_surface_id, @as(i32, @intCast(session.exclusive_zone)));
+
+    // First commit requests initial configure from compositor.
+    try sendSurfaceCommit(allocator, stream, wl_surface_id);
+
+    try sendDisplaySync(allocator, stream, configure_sync_callback_id);
+    const configure_serial = try readLayerSurfaceConfigureUntilDone(allocator, stream, layer_surface_id, configure_sync_callback_id) orelse {
+        return error.LayerSurfaceConfigureMissing;
+    };
+
+    try sendLayerSurfaceAckConfigure(allocator, stream, layer_surface_id, configure_serial);
     try sendSurfaceCommit(allocator, stream, wl_surface_id);
 }
 
@@ -793,12 +1225,60 @@ fn sendLayerSurfaceSetExclusiveZone(
     try sendWaylandRequest(allocator, stream, layer_surface_id, 2, payload.items);
 }
 
+fn sendLayerSurfaceAckConfigure(
+    allocator: std.mem.Allocator,
+    stream: *std.net.Stream,
+    layer_surface_id: u32,
+    serial: u32,
+) !void {
+    var payload = std.ArrayList(u8).init(allocator);
+    defer payload.deinit();
+    try appendU32Le(&payload, serial);
+    try sendWaylandRequest(allocator, stream, layer_surface_id, 6, payload.items);
+}
+
 fn sendSurfaceCommit(
     allocator: std.mem.Allocator,
     stream: *std.net.Stream,
     wl_surface_id: u32,
 ) !void {
     try sendWaylandRequest(allocator, stream, wl_surface_id, 6, &.{});
+}
+
+fn readLayerSurfaceConfigureUntilDone(
+    allocator: std.mem.Allocator,
+    stream: *std.net.Stream,
+    layer_surface_id: u32,
+    callback_id: u32,
+) !?u32 {
+    var reader = stream.reader();
+    var configure_serial: ?u32 = null;
+
+    while (true) {
+        var header: [8]u8 = undefined;
+        try reader.readNoEof(&header);
+
+        const object_id = readU32Le(header[0..4]);
+        const word = readU32Le(header[4..8]);
+        const size = @as(u16, @intCast(word >> 16));
+        const opcode = @as(u16, @intCast(word & 0xffff));
+
+        if (size < 8) return error.InvalidWaylandMessage;
+
+        const payload_len: usize = size - 8;
+        var payload = try allocator.alloc(u8, payload_len);
+        defer allocator.free(payload);
+        if (payload_len > 0) try reader.readNoEof(payload);
+
+        if (object_id == layer_surface_id and opcode == 0 and payload.len >= 12) {
+            // zwlr_layer_surface_v1.configure(serial, width, height)
+            configure_serial = readU32Le(payload[0..4]);
+        }
+
+        if (object_id == callback_id and opcode == 0) break;
+    }
+
+    return configure_serial;
 }
 
 fn sendWaylandRequest(
@@ -850,6 +1330,7 @@ fn readU32Le(bytes: []const u8) u32 {
         (@as(u32, bytes[3]) << 24);
 }
 
+/// Output-change watcher with wayland/udev/poll backends.
 pub const OutputWatcher = struct {
     allocator: std.mem.Allocator,
     outputs: std.ArrayList(OutputProfile),
@@ -864,6 +1345,7 @@ pub const OutputWatcher = struct {
         poll,
     };
 
+    /// Initialize watcher with best available backend.
     pub fn init(allocator: std.mem.Allocator) !OutputWatcher {
         var watcher = OutputWatcher{
             .allocator = allocator,
@@ -881,6 +1363,7 @@ pub const OutputWatcher = struct {
         return watcher;
     }
 
+    /// Initialize watcher with explicit backend selection.
     pub fn initWithBackend(allocator: std.mem.Allocator, backend: OutputEventBackend) !OutputWatcher {
         var watcher = OutputWatcher{
             .allocator = allocator,
@@ -904,6 +1387,7 @@ pub const OutputWatcher = struct {
         return watcher;
     }
 
+    /// Wait for output-change event or timeout.
     pub fn waitForEvent(self: *OutputWatcher, timeout_ms: i32) !bool {
         return switch (self.backend) {
             .wayland => try self.waitForWaylandEvent(timeout_ms),
@@ -918,6 +1402,7 @@ pub const OutputWatcher = struct {
         };
     }
 
+    /// Backend name for logging/debug output.
     pub fn backendName(self: *const OutputWatcher) []const u8 {
         return switch (self.backend) {
             .wayland => "wayland",
@@ -1014,11 +1499,13 @@ pub const OutputWatcher = struct {
         self.monitor_child = null;
     }
 
+    /// Release watcher resources.
     pub fn deinit(self: *OutputWatcher) void {
         self.stopBackend();
         freeOutputs(self.allocator, &self.outputs);
     }
 
+    /// Refresh outputs and return true when topology changed.
     pub fn poll(self: *OutputWatcher) !bool {
         var next = try detectOutputs(self.allocator);
         errdefer freeOutputs(self.allocator, &next);
@@ -1034,6 +1521,7 @@ pub const OutputWatcher = struct {
     }
 };
 
+/// Apply layout algorithm and assign rect/z-order for provided windows.
 pub fn applyWindowLayout(
     allocator: std.mem.Allocator,
     mode: LayoutMode,
@@ -1089,6 +1577,7 @@ pub fn applyWindowLayout(
     }
 }
 
+/// Detect outputs from env/wlr-randr/xrandr with sane fallback.
 pub fn detectOutputs(allocator: std.mem.Allocator) !std.ArrayList(OutputProfile) {
     var outputs = std.ArrayList(OutputProfile).init(allocator);
 
@@ -1339,12 +1828,19 @@ fn detectOutputsFromWlrRandr(allocator: std.mem.Allocator, outputs: *std.ArrayLi
     return any;
 }
 
+/// Free output names and list storage returned by `detectOutputs`.
 pub fn freeOutputs(allocator: std.mem.Allocator, outputs: *std.ArrayList(OutputProfile)) void {
     for (outputs.items) |item| allocator.free(item.name);
     outputs.deinit();
 }
 
+/// Build fullscreen surface spec for role/output pair.
 pub fn fullscreenSurface(role: SurfaceRole, output: OutputProfile) SurfaceSpec {
+    return fullscreenSurfaceThemed(role, output, SurfaceDecorationTheme.modernDefault());
+}
+
+/// Build fullscreen surface spec for role/output pair using themed decorations.
+pub fn fullscreenSurfaceThemed(role: SurfaceRole, output: OutputProfile, decor_theme: SurfaceDecorationTheme) SurfaceSpec {
     return .{
         .role = role,
         .app_id = appIdFor(role),
@@ -1354,10 +1850,11 @@ pub fn fullscreenSurface(role: SurfaceRole, output: OutputProfile) SurfaceSpec {
         .fullscreen = true,
         .output_name = output.name,
         .scale = output.scale,
-        .decoration = decorationFor(role),
+        .decoration = decorationFor(role, decor_theme),
     };
 }
 
+/// Derive render spec (physical + logical sizes) from surface spec.
 pub fn renderSpecForSurface(spec: SurfaceSpec) RenderSpec {
     const safe_scale = if (spec.scale <= 0.0) 1.0 else spec.scale;
     const logical_w_f = @as(f32, @floatFromInt(spec.width)) / safe_scale;
@@ -1373,6 +1870,7 @@ pub fn renderSpecForSurface(spec: SurfaceSpec) RenderSpec {
     };
 }
 
+/// Build fullscreen surfaces for all outputs for a given role.
 pub fn surfacesForRole(
     allocator: std.mem.Allocator,
     role: SurfaceRole,
@@ -1385,6 +1883,7 @@ pub fn surfacesForRole(
     return surfaces;
 }
 
+/// Build render specs for all outputs for a given role.
 pub fn renderSpecsForRole(
     allocator: std.mem.Allocator,
     role: SurfaceRole,
@@ -1398,18 +1897,38 @@ pub fn renderSpecsForRole(
     return specs;
 }
 
+/// Convenience helper returning default panel surface.
 pub fn panelSurface(panel_height: u8) SurfaceSpec {
     _ = panel_height;
     return fullscreenSurface(.panel, defaultOutputStatic());
 }
 
+/// Convenience helper returning default panel surface with themed decorations.
+pub fn panelSurfaceThemed(panel_height: u8, decor_theme: SurfaceDecorationTheme) SurfaceSpec {
+    _ = panel_height;
+    return fullscreenSurfaceThemed(.panel, defaultOutputStatic(), decor_theme);
+}
+
+/// Convenience helper returning default launcher surface.
 pub fn launcherSurface(width: u16) SurfaceSpec {
     _ = width;
     return fullscreenSurface(.launcher, defaultOutputStatic());
 }
 
+/// Convenience helper returning default launcher surface with themed decorations.
+pub fn launcherSurfaceThemed(width: u16, decor_theme: SurfaceDecorationTheme) SurfaceSpec {
+    _ = width;
+    return fullscreenSurfaceThemed(.launcher, defaultOutputStatic(), decor_theme);
+}
+
+/// Convenience helper returning default settings surface.
 pub fn settingsSurface() SurfaceSpec {
     return fullscreenSurface(.settings, defaultOutputStatic());
+}
+
+/// Convenience helper returning default settings surface with themed decorations.
+pub fn settingsSurfaceThemed(decor_theme: SurfaceDecorationTheme) SurfaceSpec {
+    return fullscreenSurfaceThemed(.settings, defaultOutputStatic(), decor_theme);
 }
 
 fn appIdFor(role: SurfaceRole) []const u8 {
@@ -1428,7 +1947,7 @@ fn appTitleForRole(role: SurfaceRole) []const u8 {
     };
 }
 
-fn decorationFor(role: SurfaceRole) WindowDecoration {
+fn decorationFor(role: SurfaceRole, decor_theme: SurfaceDecorationTheme) WindowDecoration {
     return switch (role) {
         .panel => .{
             .enabled = false,
@@ -1438,15 +1957,15 @@ fn decorationFor(role: SurfaceRole) WindowDecoration {
         },
         .launcher => .{
             .enabled = true,
-            .titlebar_height = 36,
-            .round_corners = true,
-            .shadow = true,
+            .titlebar_height = decor_theme.launcher_titlebar_height,
+            .round_corners = decor_theme.corner_radius > 0,
+            .shadow = decor_theme.shadow_enabled,
         },
         .settings => .{
             .enabled = true,
-            .titlebar_height = 40,
-            .round_corners = true,
-            .shadow = true,
+            .titlebar_height = decor_theme.settings_titlebar_height,
+            .round_corners = decor_theme.corner_radius > 0,
+            .shadow = decor_theme.shadow_enabled,
         },
     };
 }
@@ -1602,6 +2121,7 @@ fn outputsEqual(a: []const OutputProfile, b: []const OutputProfile) bool {
     return true;
 }
 
+/// Print concise surface summary for diagnostics/logging.
 pub fn printSurfaceSummary(spec: SurfaceSpec, tokens: ThemeTokens) void {
     std.debug.print(
         "[ui] role={s} app_id={s} output={s} size={d}x{d}@{d:.2} fullscreen={any} kbd-first={any} decor={any} radius={d} blur={d}\n",
@@ -1621,6 +2141,7 @@ pub fn printSurfaceSummary(spec: SurfaceSpec, tokens: ThemeTokens) void {
     );
 }
 
+/// Print render-spec summary for diagnostics/logging.
 pub fn printRenderSpec(spec: RenderSpec) void {
     std.debug.print(
         "[render] output={s} physical={d}x{d} scale={d:.2} logical={d}x{d}\n",

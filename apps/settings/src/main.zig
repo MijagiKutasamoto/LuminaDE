@@ -5,20 +5,37 @@ const ui = @import("luminade_ui");
 const SettingsTextKey = enum {
     settings_title,
     section_layout,
+    section_display,
     section_input,
+    section_defaults,
     section_device_profiles,
     section_live_preview,
     section_system,
+    section_appearance,
+    section_shortcuts,
     label_window_mode,
     label_tiling,
+    label_display_scale,
+    label_display_layout,
     label_pointer_sensitivity,
     label_natural_scroll,
+    label_default_terminal,
+    label_default_browser,
+    label_default_files,
+    label_theme_mode,
+    label_theme_profile,
+    label_shortcut_launcher,
+    label_shortcut_terminal,
+    label_shortcut_browser,
+    label_shortcut_files,
+    label_shortcut_settings,
     label_device_matcher,
     label_save_device_profile,
     label_apply_input,
     label_system_lock,
     label_system_suspend,
     label_system_logout,
+    label_system_network,
     label_audio_up,
     label_audio_down,
     label_audio_mute,
@@ -29,61 +46,54 @@ const SettingsTextKey = enum {
     preview_overlay,
 };
 
-fn tr(lang: core.Lang, key: SettingsTextKey) []const u8 {
-    return switch (lang) {
-        .pl => switch (key) {
-            .settings_title => "Ustawienia",
-            .section_layout => "Układ i okna",
-            .section_input => "Mysz i touchpad",
-            .section_device_profiles => "Profile urządzeń",
-            .section_live_preview => "Podgląd na żywo (układ)",
-            .section_system => "System i zasilanie",
-            .label_window_mode => "Tryb okien",
-            .label_tiling => "Kafelkowanie",
-            .label_pointer_sensitivity => "Czułość wskaźnika",
-            .label_natural_scroll => "Naturalne przewijanie",
-            .label_device_matcher => "Matcher urządzenia (fragment nazwy)",
-            .label_save_device_profile => "Zapisz profil urządzenia",
-            .label_apply_input => "Zastosuj wejście teraz",
-            .label_system_lock => "Zablokuj ekran",
-            .label_system_suspend => "Uśpij",
-            .label_system_logout => "Wyloguj",
-            .label_audio_up => "Głośniej",
-            .label_audio_down => "Ciszej",
-            .label_audio_mute => "Wycisz/odcisz",
-            .word_on => "włączone",
-            .word_off => "wyłączone",
-            .preview_main => "Główne",
-            .preview_docs => "Dokumenty",
-            .preview_overlay => "Nakładka",
-        },
-        .en => switch (key) {
-            .settings_title => "Settings",
-            .section_layout => "Layout & Windows",
-            .section_input => "Mouse & Touchpad",
-            .section_device_profiles => "Device Profiles",
-            .section_live_preview => "Live Preview (Layout)",
-            .section_system => "System & Power",
-            .label_window_mode => "Window mode",
-            .label_tiling => "Tiling",
-            .label_pointer_sensitivity => "Pointer sensitivity",
-            .label_natural_scroll => "Natural scroll",
-            .label_device_matcher => "Device matcher (substring)",
-            .label_save_device_profile => "Save device profile",
-            .label_apply_input => "Apply input now",
-            .label_system_lock => "Lock screen",
-            .label_system_suspend => "Suspend",
-            .label_system_logout => "Log out",
-            .label_audio_up => "Volume up",
-            .label_audio_down => "Volume down",
-            .label_audio_mute => "Mute / unmute",
-            .word_on => "on",
-            .word_off => "off",
-            .preview_main => "Main",
-            .preview_docs => "Docs",
-            .preview_overlay => "Overlay",
-        },
+fn trKey(key: SettingsTextKey) []const u8 {
+    return switch (key) {
+        .settings_title => "settings.title",
+        .section_layout => "settings.section.layout",
+        .section_display => "settings.section.display",
+        .section_input => "settings.section.input",
+        .section_defaults => "settings.section.defaults",
+        .section_device_profiles => "settings.section.device_profiles",
+        .section_live_preview => "settings.section.live_preview",
+        .section_system => "settings.section.system",
+        .section_appearance => "settings.section.appearance",
+        .section_shortcuts => "settings.section.shortcuts",
+        .label_window_mode => "settings.label.window_mode",
+        .label_tiling => "settings.label.tiling",
+        .label_display_scale => "settings.label.display_scale",
+        .label_display_layout => "settings.label.display_layout",
+        .label_pointer_sensitivity => "settings.label.pointer_sensitivity",
+        .label_natural_scroll => "settings.label.natural_scroll",
+        .label_default_terminal => "settings.label.default_terminal",
+        .label_default_browser => "settings.label.default_browser",
+        .label_default_files => "settings.label.default_files",
+        .label_theme_mode => "settings.label.theme_mode",
+        .label_theme_profile => "settings.label.theme_profile",
+        .label_shortcut_launcher => "settings.label.shortcut_launcher",
+        .label_shortcut_terminal => "settings.label.shortcut_terminal",
+        .label_shortcut_browser => "settings.label.shortcut_browser",
+        .label_shortcut_files => "settings.label.shortcut_files",
+        .label_shortcut_settings => "settings.label.shortcut_settings",
+        .label_device_matcher => "settings.label.device_matcher",
+        .label_save_device_profile => "settings.label.save_device_profile",
+        .label_apply_input => "settings.label.apply_input",
+        .label_system_lock => "settings.label.system_lock",
+        .label_system_suspend => "settings.label.system_suspend",
+        .label_system_logout => "settings.label.system_logout",
+        .label_system_network => "settings.label.system_network",
+        .label_audio_up => "settings.label.audio_up",
+        .label_audio_down => "settings.label.audio_down",
+        .label_audio_mute => "settings.label.audio_mute",
+        .word_on => "settings.word.on",
+        .word_off => "settings.word.off",
+        .preview_main => "settings.preview.main",
+        .preview_docs => "settings.preview.docs",
+        .preview_overlay => "settings.preview.overlay",
     };
+}
+
+fn tr(allocator: std.mem.Allocator, lang: core.Lang, key: SettingsTextKey) ![]u8 {
+    return core.localeGetWithEnFallback(allocator, lang, trKey(key));
 }
 
 pub fn main() !void {
@@ -101,10 +111,19 @@ pub fn main() !void {
     var outputs = try ui.detectOutputs(allocator);
     defer ui.freeOutputs(allocator, &outputs);
 
+    var theme_profile = try core.loadThemeProfile(allocator, cfg.profile);
+    defer theme_profile.deinit(allocator);
+    const theme_tokens: ui.ThemeTokens = .{
+        .corner_radius = theme_profile.corner_radius,
+        .spacing_unit = theme_profile.spacing_unit,
+        .blur_sigma = theme_profile.blur_sigma,
+    };
+    const decor_theme = ui.SurfaceDecorationTheme.fromThemeTokens(theme_tokens);
+
     std.debug.print("Detected outputs: {d}\n", .{outputs.items.len});
     for (outputs.items) |output| {
-        const surface = ui.fullscreenSurface(.settings, output);
-        ui.printSurfaceSummary(surface, ui.ThemeTokens.modernDefault());
+        const surface = ui.fullscreenSurfaceThemed(.settings, output, decor_theme);
+        ui.printSurfaceSummary(surface, theme_tokens);
         ui.printRenderSpec(ui.renderSpecForSurface(surface));
         try renderSettingsGui(allocator, surface, cfg.profile, cfg.lang);
     }
@@ -254,8 +273,17 @@ fn runSettingsGuiMode(
 ) !void {
     std.debug.print("Settings GUI mode started (GUI-first, no CLI required).\n", .{});
     while (true) {
+        var theme_profile_loop = try core.loadThemeProfile(allocator, cfg.profile);
+        defer theme_profile_loop.deinit(allocator);
+        const theme_tokens_loop: ui.ThemeTokens = .{
+            .corner_radius = theme_profile_loop.corner_radius,
+            .spacing_unit = theme_profile_loop.spacing_unit,
+            .blur_sigma = theme_profile_loop.blur_sigma,
+        };
+        const decor_theme_loop = ui.SurfaceDecorationTheme.fromThemeTokens(theme_tokens_loop);
+
         for (outputs.items) |output| {
-            const surface = ui.fullscreenSurface(.settings, output);
+            const surface = ui.fullscreenSurfaceThemed(.settings, output, decor_theme_loop);
             try renderSettingsGui(allocator, surface, cfg.profile, cfg.lang);
         }
 
@@ -311,7 +339,7 @@ fn processSettingsGuiEventQueue(allocator: std.mem.Allocator, cfg: *core.Runtime
 
     var truncate = try std.fs.cwd().createFile(path, .{ .truncate = true });
     defer truncate.close();
-    try truncate.writer().writeAll("# widget-id\t[arg1]\t[arg2]\n");
+        try truncate.writer().writeAll("# widget-id\t[arg1]\t[arg2]\n# window-mode\n# display-layout\n# display-scale-minus\n# display-scale-plus\n# natural-scroll\n# apply-input\t--dry-run\n# system-lock\n# system-network\n# audio-volume-up\n");
 
     return changed;
 }
@@ -329,49 +357,282 @@ fn renderSettingsGui(
     profile: core.DesktopProfile,
     lang: core.Lang,
 ) !void {
-    var frame = ui.GuiFrame.init(allocator, tr(lang, .settings_title), surface);
+    const settings_title = try tr(allocator, lang, .settings_title);
+    defer allocator.free(settings_title);
+
+    var frame = ui.GuiFrame.init(allocator, settings_title, surface);
     defer frame.deinit();
 
-    const window_mode_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ tr(lang, .label_window_mode), @tagName(profile.window_mode) });
+    const window_mode_text = try tr(allocator, lang, .label_window_mode);
+    defer allocator.free(window_mode_text);
+    const tiling_text = try tr(allocator, lang, .label_tiling);
+    defer allocator.free(tiling_text);
+    const display_scale_text = try tr(allocator, lang, .label_display_scale);
+    defer allocator.free(display_scale_text);
+    const display_layout_text = try tr(allocator, lang, .label_display_layout);
+    defer allocator.free(display_layout_text);
+    const pointer_text = try tr(allocator, lang, .label_pointer_sensitivity);
+    defer allocator.free(pointer_text);
+    const natural_text = try tr(allocator, lang, .label_natural_scroll);
+    defer allocator.free(natural_text);
+    const default_terminal_text = try tr(allocator, lang, .label_default_terminal);
+    defer allocator.free(default_terminal_text);
+    const default_browser_text = try tr(allocator, lang, .label_default_browser);
+    defer allocator.free(default_browser_text);
+    const default_files_text = try tr(allocator, lang, .label_default_files);
+    defer allocator.free(default_files_text);
+    const theme_mode_text = try tr(allocator, lang, .label_theme_mode);
+    defer allocator.free(theme_mode_text);
+    const theme_profile_text = try tr(allocator, lang, .label_theme_profile);
+    defer allocator.free(theme_profile_text);
+    const shortcut_launcher_text = try tr(allocator, lang, .label_shortcut_launcher);
+    defer allocator.free(shortcut_launcher_text);
+    const shortcut_terminal_text = try tr(allocator, lang, .label_shortcut_terminal);
+    defer allocator.free(shortcut_terminal_text);
+    const shortcut_browser_text = try tr(allocator, lang, .label_shortcut_browser);
+    defer allocator.free(shortcut_browser_text);
+    const shortcut_files_text = try tr(allocator, lang, .label_shortcut_files);
+    defer allocator.free(shortcut_files_text);
+    const shortcut_settings_text = try tr(allocator, lang, .label_shortcut_settings);
+    defer allocator.free(shortcut_settings_text);
+    const word_on = try tr(allocator, lang, .word_on);
+    defer allocator.free(word_on);
+    const word_off = try tr(allocator, lang, .word_off);
+    defer allocator.free(word_off);
+    const device_matcher_label = try tr(allocator, lang, .label_device_matcher);
+    defer allocator.free(device_matcher_label);
+
+    const window_mode_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ window_mode_text, @tagName(profile.window_mode) });
     defer allocator.free(window_mode_label);
-    const tiling_label = try std.fmt.allocPrint(allocator, "{s}: {s} ({d}%)", .{ tr(lang, .label_tiling), @tagName(profile.tiling_algorithm), profile.master_ratio_percent });
+    const tiling_label = try std.fmt.allocPrint(allocator, "{s}: {s} ({d}%)", .{ tiling_text, @tagName(profile.tiling_algorithm), profile.master_ratio_percent });
     defer allocator.free(tiling_label);
-    const pointer_label = try std.fmt.allocPrint(allocator, "{s}: {d}", .{ tr(lang, .label_pointer_sensitivity), profile.pointer_sensitivity });
+    const display_scale_label = try std.fmt.allocPrint(allocator, "{s}: {d}%", .{ display_scale_text, profile.display_scale_percent });
+    defer allocator.free(display_scale_label);
+    const display_layout_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ display_layout_text, @tagName(profile.display_layout_mode) });
+    defer allocator.free(display_layout_label);
+    const pointer_label = try std.fmt.allocPrint(allocator, "{s}: {d}", .{ pointer_text, profile.pointer_sensitivity });
     defer allocator.free(pointer_label);
-    const natural_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ tr(lang, .label_natural_scroll), if (profile.natural_scroll) tr(lang, .word_on) else tr(lang, .word_off) });
+    const natural_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ natural_text, if (profile.natural_scroll) word_on else word_off });
     defer allocator.free(natural_label);
-    const device_matcher_label = tr(lang, .label_device_matcher);
+    const default_terminal_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ default_terminal_text, @tagName(profile.default_terminal_app) });
+    defer allocator.free(default_terminal_label);
+    const default_browser_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ default_browser_text, @tagName(profile.default_browser_app) });
+    defer allocator.free(default_browser_label);
+    const default_files_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ default_files_text, @tagName(profile.default_files_app) });
+    defer allocator.free(default_files_label);
+    const theme_mode_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ theme_mode_text, @tagName(profile.theme_mode) });
+    defer allocator.free(theme_mode_label);
+    const theme_profile_label = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ theme_profile_text, @tagName(profile.theme_profile) });
+    defer allocator.free(theme_profile_label);
+    const system_lock_text = try tr(allocator, lang, .label_system_lock);
+    defer allocator.free(system_lock_text);
+    const system_suspend_text = try tr(allocator, lang, .label_system_suspend);
+    defer allocator.free(system_suspend_text);
+    const system_logout_text = try tr(allocator, lang, .label_system_logout);
+    defer allocator.free(system_logout_text);
+    const system_network_text = try tr(allocator, lang, .label_system_network);
+    defer allocator.free(system_network_text);
+    const audio_up_text = try tr(allocator, lang, .label_audio_up);
+    defer allocator.free(audio_up_text);
+    const audio_down_text = try tr(allocator, lang, .label_audio_down);
+    defer allocator.free(audio_down_text);
+    const audio_mute_text = try tr(allocator, lang, .label_audio_mute);
+    defer allocator.free(audio_mute_text);
+
+    const system_lock_label = try ui.composeIconLabel(allocator, "system-lock-screen-symbolic", system_lock_text);
+    defer allocator.free(system_lock_label);
+    const system_suspend_label = try ui.composeIconLabel(allocator, "system-suspend-symbolic", system_suspend_text);
+    defer allocator.free(system_suspend_label);
+    const system_logout_label = try ui.composeIconLabel(allocator, "system-log-out-symbolic", system_logout_text);
+    defer allocator.free(system_logout_label);
+    const system_network_label = try ui.composeIconLabel(allocator, "network-wireless-symbolic", system_network_text);
+    defer allocator.free(system_network_label);
+    const audio_up_label = try ui.composeIconLabel(allocator, "audio-volume-high-symbolic", audio_up_text);
+    defer allocator.free(audio_up_label);
+    const audio_down_label = try ui.composeIconLabel(allocator, "audio-volume-medium-symbolic", audio_down_text);
+    defer allocator.free(audio_down_label);
+    const audio_mute_label = try ui.composeIconLabel(allocator, "audio-volume-muted-symbolic", audio_mute_text);
+    defer allocator.free(audio_mute_label);
+
+    const section_layout_label = try tr(allocator, lang, .section_layout);
+    defer allocator.free(section_layout_label);
+    const section_input_label = try tr(allocator, lang, .section_input);
+    defer allocator.free(section_input_label);
+    const section_defaults_label = try tr(allocator, lang, .section_defaults);
+    defer allocator.free(section_defaults_label);
+    const section_display_label = try tr(allocator, lang, .section_display);
+    defer allocator.free(section_display_label);
+    const section_device_profiles_label = try tr(allocator, lang, .section_device_profiles);
+    defer allocator.free(section_device_profiles_label);
+    const save_device_profile_label = try tr(allocator, lang, .label_save_device_profile);
+    defer allocator.free(save_device_profile_label);
+    const apply_input_label = try tr(allocator, lang, .label_apply_input);
+    defer allocator.free(apply_input_label);
+    const section_live_preview_label = try tr(allocator, lang, .section_live_preview);
+    defer allocator.free(section_live_preview_label);
+    const section_system_label = try tr(allocator, lang, .section_system);
+    defer allocator.free(section_system_label);
+    const section_appearance_label = try tr(allocator, lang, .section_appearance);
+    defer allocator.free(section_appearance_label);
+    const section_shortcuts_label = try tr(allocator, lang, .section_shortcuts);
+    defer allocator.free(section_shortcuts_label);
+
+    var shortcuts = try core.loadShortcuts(allocator);
+    defer core.freeShortcuts(allocator, &shortcuts);
+
+    const shortcut_launcher_label = try std.fmt.allocPrint(
+        allocator,
+        "{s}: {s}",
+        .{ shortcut_launcher_text, core.shortcutBinding(shortcuts.items, .launcher_toggle) },
+    );
+    defer allocator.free(shortcut_launcher_label);
+    const shortcut_terminal_label = try std.fmt.allocPrint(
+        allocator,
+        "{s}: {s}",
+        .{ shortcut_terminal_text, core.shortcutBinding(shortcuts.items, .terminal_open) },
+    );
+    defer allocator.free(shortcut_terminal_label);
+    const shortcut_browser_label = try std.fmt.allocPrint(
+        allocator,
+        "{s}: {s}",
+        .{ shortcut_browser_text, core.shortcutBinding(shortcuts.items, .browser_open) },
+    );
+    defer allocator.free(shortcut_browser_label);
+    const shortcut_files_label = try std.fmt.allocPrint(
+        allocator,
+        "{s}: {s}",
+        .{ shortcut_files_text, core.shortcutBinding(shortcuts.items, .files_open) },
+    );
+    defer allocator.free(shortcut_files_label);
+    const shortcut_settings_label = try std.fmt.allocPrint(
+        allocator,
+        "{s}: {s}",
+        .{ shortcut_settings_text, core.shortcutBinding(shortcuts.items, .settings_open) },
+    );
+    defer allocator.free(shortcut_settings_label);
+
+    // Settings uses a responsive two-column geometry so controls keep consistent rhythm across resolutions.
+    const outer: i32 = 36;
+    const col_gap: i32 = 26;
+    const section_h: u16 = 30;
+    const control_h: u16 = 46;
+    const section_to_controls: i32 = 36;
+    const row_gap: i32 = 12;
+    const block_gap: i32 = 30;
+
+    const surface_w = @as(i32, @intCast(surface.width));
+    const content_w = @max(@as(i32, 340), surface_w - 2 * outer);
+    const right_col_w = @max(@as(i32, 240), @min(@as(i32, 340), @divTrunc(content_w, 3)));
+    const left_col_w = @max(@as(i32, 240), content_w - right_col_w - col_gap);
+    const left_half_w = @max(@as(i32, 160), @divTrunc(left_col_w - 14, 2));
+    const left_x: i32 = outer;
+    const right_x: i32 = left_x + left_col_w + col_gap;
+    const top_y: i32 = 74;
 
     try ui.addWidget(&frame, .{
         .id = "settings-root",
         .kind = .column,
         .label = "settings-root",
-        .rect = .{ .x = 24, .y = 56, .w = @max(surface.width - 48, 240), .h = @max(surface.height - 80, 160) },
+        .rect = .{
+            .x = outer - 8,
+            .y = 56,
+            .w = @as(u16, @intCast(@max(@as(i32, 240), content_w + 16))),
+            .h = @max(surface.height - 80, 160),
+        },
         .interactive = false,
         .hoverable = false,
     });
 
     try ui.addWidget(&frame, .{
+        .id = "settings-look-chip",
+        .kind = .badge,
+        .label = "Aurora Glass",
+        .rect = .{ .x = left_x, .y = 40, .w = 150, .h = 24 },
+        .interactive = false,
+        .hoverable = false,
+    });
+
+    const left_card_h = @max(@as(i32, 420), @as(i32, @intCast(surface.height)) - top_y - 44);
+    const right_card_h = @max(@as(i32, 360), @as(i32, @intCast(surface.height)) - top_y - 44);
+
+    try ui.addWidget(&frame, .{
+        .id = "settings-card-left",
+        .kind = .row,
+        .label = "card-left",
+        .rect = .{
+            .x = left_x - 10,
+            .y = top_y - 14,
+            .w = @as(u16, @intCast(left_col_w + 20)),
+            .h = @as(u16, @intCast(left_card_h)),
+        },
+        .interactive = false,
+        .hoverable = false,
+    });
+
+    try ui.addWidget(&frame, .{
+        .id = "settings-card-right",
+        .kind = .row,
+        .label = "card-right",
+        .rect = .{
+            .x = right_x - 10,
+            .y = top_y - 14,
+            .w = @as(u16, @intCast(right_col_w + 20)),
+            .h = @as(u16, @intCast(right_card_h)),
+        },
+        .interactive = false,
+        .hoverable = false,
+    });
+
+    const section_layout_y = top_y;
+    const section_display_y = section_layout_y + section_to_controls + @as(i32, @intCast(control_h)) + block_gap;
+    const section_input_y = section_display_y + section_to_controls + @as(i32, @intCast(control_h)) + block_gap;
+    const section_defaults_y = section_input_y + section_to_controls + @as(i32, @intCast(control_h)) + block_gap;
+    const section_device_y = section_defaults_y + section_to_controls + @as(i32, @intCast(control_h)) + block_gap;
+    const section_live_y = section_device_y + section_to_controls + @as(i32, @intCast(control_h)) + block_gap;
+
+    const layout_row_y = section_layout_y + section_to_controls;
+    const display_row_y = section_display_y + section_to_controls;
+    const input_row_y = section_input_y + section_to_controls;
+    const defaults_row_y = section_defaults_y + section_to_controls;
+    const device_row_y = section_device_y + section_to_controls;
+
+    try ui.addWidget(&frame, .{
         .id = "section-layout",
         .kind = .text,
-        .label = tr(lang, .section_layout),
-        .rect = .{ .x = 32, .y = 74, .w = 280, .h = 28 },
+        .label = section_layout_label,
+        .rect = .{ .x = left_x, .y = section_layout_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
+        .interactive = false,
+        .hoverable = false,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "section-display",
+        .kind = .text,
+        .label = section_display_label,
+        .rect = .{ .x = left_x, .y = section_display_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
         .interactive = false,
         .hoverable = false,
     });
     try ui.addWidget(&frame, .{
         .id = "section-input",
         .kind = .text,
-        .label = tr(lang, .section_input),
-        .rect = .{ .x = 32, .y = 164, .w = 280, .h = 28 },
+        .label = section_input_label,
+        .rect = .{ .x = left_x, .y = section_input_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
+        .interactive = false,
+        .hoverable = false,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "section-defaults",
+        .kind = .text,
+        .label = section_defaults_label,
+        .rect = .{ .x = left_x, .y = section_defaults_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
         .interactive = false,
         .hoverable = false,
     });
     try ui.addWidget(&frame, .{
         .id = "section-device-profiles",
         .kind = .text,
-        .label = tr(lang, .section_device_profiles),
-        .rect = .{ .x = 32, .y = 258, .w = 280, .h = 28 },
+        .label = section_device_profiles_label,
+        .rect = .{ .x = left_x, .y = section_device_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
         .interactive = false,
         .hoverable = false,
     });
@@ -380,7 +641,7 @@ fn renderSettingsGui(
         .id = "window-mode",
         .kind = .button,
         .label = window_mode_label,
-        .rect = .{ .x = 32, .y = 108, .w = 220, .h = 40 },
+        .rect = .{ .x = left_x, .y = layout_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -388,7 +649,40 @@ fn renderSettingsGui(
         .id = "tiling-algorithm",
         .kind = .button,
         .label = tiling_label,
-        .rect = .{ .x = 264, .y = 108, .w = 220, .h = 40 },
+        .rect = .{ .x = left_x + left_half_w + 14, .y = layout_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+
+    try ui.addWidget(&frame, .{
+        .id = "display-scale-minus",
+        .kind = .button,
+        .label = "-",
+        .rect = .{ .x = left_x, .y = display_row_y, .w = 48, .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "display-scale",
+        .kind = .button,
+        .label = display_scale_label,
+        .rect = .{ .x = left_x + 56, .y = display_row_y, .w = @as(u16, @intCast(left_half_w - 56)), .h = control_h },
+        .interactive = false,
+        .hoverable = false,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "display-scale-plus",
+        .kind = .button,
+        .label = "+",
+        .rect = .{ .x = left_x + left_half_w - 48, .y = display_row_y, .w = 48, .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "display-layout",
+        .kind = .button,
+        .label = display_layout_label,
+        .rect = .{ .x = left_x + left_half_w + 14, .y = display_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -397,7 +691,7 @@ fn renderSettingsGui(
         .id = "pointer-sensitivity",
         .kind = .input,
         .label = pointer_label,
-        .rect = .{ .x = 32, .y = 198, .w = 220, .h = 40 },
+        .rect = .{ .x = left_x, .y = input_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -405,7 +699,32 @@ fn renderSettingsGui(
         .id = "natural-scroll",
         .kind = .toggle,
         .label = natural_label,
-        .rect = .{ .x = 264, .y = 198, .w = 220, .h = 40 },
+        .rect = .{ .x = left_x + left_half_w + 14, .y = input_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+
+    try ui.addWidget(&frame, .{
+        .id = "default-terminal",
+        .kind = .button,
+        .label = default_terminal_label,
+        .rect = .{ .x = left_x, .y = defaults_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "default-browser",
+        .kind = .button,
+        .label = default_browser_label,
+        .rect = .{ .x = left_x + left_half_w + 14, .y = defaults_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "default-files",
+        .kind = .button,
+        .label = default_files_label,
+        .rect = .{ .x = left_x, .y = defaults_row_y + @as(i32, @intCast(control_h)) + row_gap, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -414,15 +733,15 @@ fn renderSettingsGui(
         .id = "device-matcher",
         .kind = .input,
         .label = device_matcher_label,
-        .rect = .{ .x = 32, .y = 292, .w = 220, .h = 40 },
+        .rect = .{ .x = left_x, .y = device_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "save-device-profile",
         .kind = .button,
-        .label = tr(lang, .label_save_device_profile),
-        .rect = .{ .x = 264, .y = 292, .w = 220, .h = 40 },
+        .label = save_device_profile_label,
+        .rect = .{ .x = left_x + left_half_w + 14, .y = device_row_y, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -430,8 +749,8 @@ fn renderSettingsGui(
     try ui.addWidget(&frame, .{
         .id = "apply-input",
         .kind = .button,
-        .label = tr(lang, .label_apply_input),
-        .rect = .{ .x = 32, .y = 344, .w = 220, .h = 40 },
+        .label = apply_input_label,
+        .rect = .{ .x = left_x, .y = device_row_y + @as(i32, @intCast(control_h)) + row_gap, .w = @as(u16, @intCast(left_half_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
@@ -439,8 +758,8 @@ fn renderSettingsGui(
     try ui.addWidget(&frame, .{
         .id = "section-live-preview",
         .kind = .text,
-        .label = tr(lang, .section_live_preview),
-        .rect = .{ .x = 32, .y = 398, .w = 320, .h = 28 },
+        .label = section_live_preview_label,
+        .rect = .{ .x = left_x, .y = section_live_y, .w = @as(u16, @intCast(left_col_w)), .h = section_h },
         .interactive = false,
         .hoverable = false,
     });
@@ -448,62 +767,170 @@ fn renderSettingsGui(
     try ui.addWidget(&frame, .{
         .id = "section-system",
         .kind = .text,
-        .label = tr(lang, .section_system),
-        .rect = .{ .x = 568, .y = 74, .w = 280, .h = 28 },
+        .label = section_system_label,
+        .rect = .{ .x = right_x, .y = top_y, .w = @as(u16, @intCast(right_col_w)), .h = section_h },
         .interactive = false,
         .hoverable = false,
     });
 
+    const system_row_1 = top_y + section_to_controls;
+    const system_row_2 = system_row_1 + @as(i32, @intCast(control_h)) + row_gap;
+    const system_row_3 = system_row_2 + @as(i32, @intCast(control_h)) + row_gap;
+    const system_row_4 = system_row_3 + @as(i32, @intCast(control_h)) + row_gap;
+    const system_row_5 = system_row_4 + @as(i32, @intCast(control_h)) + row_gap;
+    const system_row_6 = system_row_5 + @as(i32, @intCast(control_h)) + row_gap;
+    const system_row_7 = system_row_6 + @as(i32, @intCast(control_h)) + row_gap;
+    const appearance_section_y = system_row_7 + @as(i32, @intCast(control_h)) + block_gap;
+    const appearance_row_1 = appearance_section_y + section_to_controls;
+    const appearance_row_2 = appearance_row_1 + @as(i32, @intCast(control_h)) + row_gap;
+    const shortcuts_section_y = appearance_row_2 + @as(i32, @intCast(control_h)) + block_gap;
+    const shortcuts_row_1 = shortcuts_section_y + section_to_controls;
+    const shortcuts_row_2 = shortcuts_row_1 + @as(i32, @intCast(control_h)) + row_gap;
+    const shortcuts_row_3 = shortcuts_row_2 + @as(i32, @intCast(control_h)) + row_gap;
+    const shortcuts_row_4 = shortcuts_row_3 + @as(i32, @intCast(control_h)) + row_gap;
+    const shortcuts_row_5 = shortcuts_row_4 + @as(i32, @intCast(control_h)) + row_gap;
+
     try ui.addWidget(&frame, .{
         .id = "system-lock",
         .kind = .button,
-        .label = tr(lang, .label_system_lock),
-        .rect = .{ .x = 568, .y = 108, .w = 220, .h = 40 },
+        .label = system_lock_label,
+        .rect = .{ .x = right_x, .y = system_row_1, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "system-suspend",
         .kind = .button,
-        .label = tr(lang, .label_system_suspend),
-        .rect = .{ .x = 568, .y = 156, .w = 220, .h = 40 },
+        .label = system_suspend_label,
+        .rect = .{ .x = right_x, .y = system_row_2, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "system-logout",
         .kind = .button,
-        .label = tr(lang, .label_system_logout),
-        .rect = .{ .x = 568, .y = 204, .w = 220, .h = 40 },
+        .label = system_logout_label,
+        .rect = .{ .x = right_x, .y = system_row_3, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "audio-volume-up",
         .kind = .button,
-        .label = tr(lang, .label_audio_up),
-        .rect = .{ .x = 568, .y = 252, .w = 220, .h = 40 },
+        .label = audio_up_label,
+        .rect = .{ .x = right_x, .y = system_row_4, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "audio-volume-down",
         .kind = .button,
-        .label = tr(lang, .label_audio_down),
-        .rect = .{ .x = 568, .y = 300, .w = 220, .h = 40 },
+        .label = audio_down_label,
+        .rect = .{ .x = right_x, .y = system_row_5, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
     try ui.addWidget(&frame, .{
         .id = "audio-mute",
         .kind = .button,
-        .label = tr(lang, .label_audio_mute),
-        .rect = .{ .x = 568, .y = 348, .w = 220, .h = 40 },
+        .label = audio_mute_label,
+        .rect = .{ .x = right_x, .y = system_row_6, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "system-network",
+        .kind = .button,
+        .label = system_network_label,
+        .rect = .{ .x = right_x, .y = system_row_7, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
         .interactive = true,
         .hoverable = true,
     });
 
-    try addLayoutPreviewWidgets(allocator, &frame, surface, profile, lang);
+    try ui.addWidget(&frame, .{
+        .id = "section-appearance",
+        .kind = .text,
+        .label = section_appearance_label,
+        .rect = .{ .x = right_x, .y = appearance_section_y, .w = @as(u16, @intCast(right_col_w)), .h = section_h },
+        .interactive = false,
+        .hoverable = false,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "theme-mode",
+        .kind = .button,
+        .label = theme_mode_label,
+        .rect = .{ .x = right_x, .y = appearance_row_1, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "theme-profile",
+        .kind = .button,
+        .label = theme_profile_label,
+        .rect = .{ .x = right_x, .y = appearance_row_2, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+
+    try ui.addWidget(&frame, .{
+        .id = "section-shortcuts",
+        .kind = .text,
+        .label = section_shortcuts_label,
+        .rect = .{ .x = right_x, .y = shortcuts_section_y, .w = @as(u16, @intCast(right_col_w)), .h = section_h },
+        .interactive = false,
+        .hoverable = false,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "shortcut-launcher",
+        .kind = .button,
+        .label = shortcut_launcher_label,
+        .rect = .{ .x = right_x, .y = shortcuts_row_1, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "shortcut-terminal",
+        .kind = .button,
+        .label = shortcut_terminal_label,
+        .rect = .{ .x = right_x, .y = shortcuts_row_2, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "shortcut-browser",
+        .kind = .button,
+        .label = shortcut_browser_label,
+        .rect = .{ .x = right_x, .y = shortcuts_row_3, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "shortcut-files",
+        .kind = .button,
+        .label = shortcut_files_label,
+        .rect = .{ .x = right_x, .y = shortcuts_row_4, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+    try ui.addWidget(&frame, .{
+        .id = "shortcut-settings",
+        .kind = .button,
+        .label = shortcut_settings_label,
+        .rect = .{ .x = right_x, .y = shortcuts_row_5, .w = @as(u16, @intCast(right_col_w)), .h = control_h },
+        .interactive = true,
+        .hoverable = true,
+    });
+
+    try addLayoutPreviewWidgets(
+        allocator,
+        &frame,
+        surface,
+        profile,
+        lang,
+        left_x,
+        section_live_y + section_to_controls,
+        @as(u16, @intCast(left_col_w)),
+    );
 
     ui.printGuiFrame(&frame);
 }
@@ -514,12 +941,26 @@ fn addLayoutPreviewWidgets(
     surface: ui.SurfaceSpec,
     profile: core.DesktopProfile,
     lang: core.Lang,
+    origin_x: i32,
+    origin_y: i32,
+    max_width: u16,
 ) !void {
+    const preview_main_label = try tr(allocator, lang, .preview_main);
+    defer allocator.free(preview_main_label);
+    const preview_docs_label = try tr(allocator, lang, .preview_docs);
+    defer allocator.free(preview_docs_label);
+    const preview_overlay_label = try tr(allocator, lang, .preview_overlay);
+    defer allocator.free(preview_overlay_label);
+
+    const remaining_w = @as(i32, @intCast(surface.width)) - origin_x - 36;
+    const remaining_h = @as(i32, @intCast(surface.height)) - origin_y - 40;
+    if (remaining_w < 120 or remaining_h < 80) return;
+
     const preview: ui.Rect = .{
-        .x = 32,
-        .y = 432,
-        .w = @min(@as(u16, 520), surface.width -| 64),
-        .h = @min(@as(u16, 220), surface.height -| 456),
+        .x = origin_x,
+        .y = origin_y,
+        .w = @min(max_width, @as(u16, @intCast(remaining_w))),
+        .h = @min(@as(u16, 260), @as(u16, @intCast(remaining_h))),
     };
 
     if (preview.w < 120 or preview.h < 80) return;
@@ -614,9 +1055,9 @@ fn addLayoutPreviewWidgets(
             else => "preview-box-overlay",
         };
         const label = switch (idx) {
-            0 => tr(lang, .preview_main),
-            1 => tr(lang, .preview_docs),
-            else => tr(lang, .preview_overlay),
+            0 => preview_main_label,
+            1 => preview_docs_label,
+            else => preview_overlay_label,
         };
 
         try ui.addWidget(frame, .{
@@ -638,12 +1079,18 @@ fn addLayoutPreviewWidgets(
 fn printProfile(profile: core.DesktopProfile, lang: core.Lang) void {
     std.debug.print("{s}\n", .{if (lang == .pl) "Aktualny profil" else "Current profile"});
     std.debug.print("- theme={s}\n", .{@tagName(profile.theme_mode)});
+    std.debug.print("- theme_profile={s}\n", .{@tagName(profile.theme_profile)});
     std.debug.print("- density={s}\n", .{@tagName(profile.density)});
     std.debug.print("- motion={s}\n", .{@tagName(profile.motion)});
     std.debug.print("- panel_height={d}\n", .{profile.panel_height});
     std.debug.print("- corner_radius={d}\n", .{profile.corner_radius});
     std.debug.print("- blur_sigma={d}\n", .{profile.blur_sigma});
     std.debug.print("- launcher_width={d}\n", .{profile.launcher_width});
+    std.debug.print("- display_scale_percent={d}\n", .{profile.display_scale_percent});
+    std.debug.print("- display_layout_mode={s}\n", .{@tagName(profile.display_layout_mode)});
+    std.debug.print("- default_terminal_app={s}\n", .{@tagName(profile.default_terminal_app)});
+    std.debug.print("- default_browser_app={s}\n", .{@tagName(profile.default_browser_app)});
+    std.debug.print("- default_files_app={s}\n", .{@tagName(profile.default_files_app)});
     std.debug.print("- workspace_gaps={d}\n", .{profile.workspace_gaps});
     std.debug.print("- smart_hide_panel={any}\n", .{profile.smart_hide_panel});
     std.debug.print("- window_mode={s}\n", .{@tagName(profile.window_mode)});
@@ -675,6 +1122,12 @@ fn printUsage(lang: core.Lang) void {
     std.debug.print("  luminade-settings apply-input --dry-run\n", .{});
     std.debug.print("\nKeys (new):\n", .{});
     std.debug.print("  window_mode = tiling | floating | hybrid\n", .{});
+    std.debug.print("  theme_profile = aurora_glass | graphite | solaris_light\n", .{});
+    std.debug.print("  display_scale_percent = 50..200\n", .{});
+    std.debug.print("  display_layout_mode = single | extended | mirrored\n", .{});
+    std.debug.print("  default_terminal_app = foot | alacritty | kitty\n", .{});
+    std.debug.print("  default_browser_app = firefox | chromium | brave\n", .{});
+    std.debug.print("  default_files_app = thunar | nautilus | dolphin\n", .{});
     std.debug.print("  interaction_mode = keyboard_first | balanced | mouse_first\n", .{});
     std.debug.print("  pointer_sensitivity = -100..100\n", .{});
     std.debug.print("  pointer_accel_profile = adaptive | flat\n", .{});
@@ -692,7 +1145,14 @@ fn printUsage(lang: core.Lang) void {
     std.debug.print("  toggle-natural-scroll\n", .{});
     std.debug.print("  toggle-tap-to-click\n", .{});
     std.debug.print("  cycle-window-mode\n", .{});
+    std.debug.print("  cycle-display-layout\n", .{});
+    std.debug.print("  adjust-display-scale <delta>\n", .{});
     std.debug.print("  cycle-tiling-algorithm\n", .{});
+    std.debug.print("  cycle-default-terminal\n", .{});
+    std.debug.print("  cycle-default-browser\n", .{});
+    std.debug.print("  cycle-default-files\n", .{});
+    std.debug.print("  cycle-theme-mode\n", .{});
+    std.debug.print("  cycle-theme-profile\n", .{});
     std.debug.print("  set-pointer-sensitivity <value>\n", .{});
     std.debug.print("  set-master-ratio <20..80>\n", .{});
     std.debug.print("  set-layout-gap <0..255>\n", .{});
@@ -706,7 +1166,16 @@ fn printUsage(lang: core.Lang) void {
     std.debug.print("\nGUI widget click examples:\n", .{});
     std.debug.print("  gui-click window-mode\n", .{});
     std.debug.print("  gui-click tiling-algorithm\n", .{});
+    std.debug.print("  gui-click display-layout\n", .{});
+    std.debug.print("  gui-click display-scale-minus\n", .{});
+    std.debug.print("  gui-click display-scale-plus\n", .{});
     std.debug.print("  gui-click natural-scroll\n", .{});
+    std.debug.print("  gui-click default-terminal\n", .{});
+    std.debug.print("  gui-click default-browser\n", .{});
+    std.debug.print("  gui-click default-files\n", .{});
+    std.debug.print("  gui-click theme-mode\n", .{});
+    std.debug.print("  gui-click theme-profile\n", .{});
+    std.debug.print("  gui-click shortcut-launcher\n", .{});
     std.debug.print("  gui-click pointer-sensitivity 25\n", .{});
     std.debug.print("  gui-click save-device-profile touchpad natural_scroll true\n", .{});
     std.debug.print("  gui-click apply-input [--dry-run]\n", .{});
@@ -860,11 +1329,77 @@ fn applyGuiAction(
         return true;
     }
 
+    if (std.mem.eql(u8, action, "cycle-display-layout")) {
+        cfg.profile.display_layout_mode = switch (cfg.profile.display_layout_mode) {
+            .single => .extended,
+            .extended => .mirrored,
+            .mirrored => .single,
+        };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "adjust-display-scale") and action_args.len >= 2) {
+        const delta = std.fmt.parseInt(i16, action_args[1], 10) catch return false;
+        const base = @as(i16, @intCast(cfg.profile.display_scale_percent));
+        const adjusted = @max(@as(i16, 50), @min(@as(i16, 200), base + delta));
+        cfg.profile.display_scale_percent = @as(u8, @intCast(adjusted));
+        return true;
+    }
+
     if (std.mem.eql(u8, action, "cycle-tiling-algorithm")) {
         cfg.profile.tiling_algorithm = switch (cfg.profile.tiling_algorithm) {
             .master_stack => .grid,
             .grid => .master_stack,
         };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "cycle-default-terminal")) {
+        cfg.profile.default_terminal_app = switch (cfg.profile.default_terminal_app) {
+            .foot => .alacritty,
+            .alacritty => .kitty,
+            .kitty => .foot,
+        };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "cycle-default-browser")) {
+        cfg.profile.default_browser_app = switch (cfg.profile.default_browser_app) {
+            .firefox => .chromium,
+            .chromium => .brave,
+            .brave => .firefox,
+        };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "cycle-default-files")) {
+        cfg.profile.default_files_app = switch (cfg.profile.default_files_app) {
+            .thunar => .nautilus,
+            .nautilus => .dolphin,
+            .dolphin => .thunar,
+        };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "cycle-theme-mode")) {
+        cfg.profile.theme_mode = switch (cfg.profile.theme_mode) {
+            .dark => .light,
+            .light => .auto,
+            .auto => .dark,
+        };
+        return true;
+    }
+
+    if (std.mem.eql(u8, action, "cycle-theme-profile")) {
+        cfg.profile.theme_profile = switch (cfg.profile.theme_profile) {
+            .aurora_glass => .graphite,
+            .graphite => .solaris_light,
+            .solaris_light => .aurora_glass,
+        };
+
+        var theme = try core.loadThemeProfile(allocator, cfg.profile);
+        defer theme.deinit(allocator);
+        try core.saveThemeProfile(allocator, theme);
         return true;
     }
 
@@ -884,57 +1419,31 @@ fn applyGuiAction(
     }
 
     if (std.mem.eql(u8, action, "system-lock")) {
-        return try runSystemCommandFallback(
-            allocator,
-            &.{
-                &.{ "loginctl", "lock-session" },
-                &.{ "sh", "-lc", "command -v swaylock >/dev/null 2>&1 && swaylock" },
-            },
-        );
+        return try core.runSystemAction(allocator, .lock_session);
     }
 
     if (std.mem.eql(u8, action, "system-suspend")) {
-        return try runSystemCommandFallback(allocator, &.{&.{ "systemctl", "suspend" }});
+        return try core.runSystemAction(allocator, .suspend);
     }
 
     if (std.mem.eql(u8, action, "system-logout")) {
-        return try runSystemCommandFallback(
-            allocator,
-            &.{
-                &.{ "loginctl", "terminate-user", std.posix.getenv("USER") orelse "" },
-                &.{ "sh", "-lc", "pkill -KILL -u \"$USER\"" },
-            },
-        );
+        return try core.runSystemAction(allocator, .logout);
+    }
+
+    if (std.mem.eql(u8, action, "system-network-open")) {
+        return try core.runSystemAction(allocator, .open_network);
     }
 
     if (std.mem.eql(u8, action, "audio-volume-up")) {
-        return try runSystemCommandFallback(
-            allocator,
-            &.{
-                &.{ "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+" },
-                &.{ "pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%" },
-            },
-        );
+        return try core.runSystemAction(allocator, .audio_volume_up);
     }
 
     if (std.mem.eql(u8, action, "audio-volume-down")) {
-        return try runSystemCommandFallback(
-            allocator,
-            &.{
-                &.{ "wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-" },
-                &.{ "pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%" },
-            },
-        );
+        return try core.runSystemAction(allocator, .audio_volume_down);
     }
 
     if (std.mem.eql(u8, action, "audio-mute")) {
-        return try runSystemCommandFallback(
-            allocator,
-            &.{
-                &.{ "wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle" },
-                &.{ "pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle" },
-            },
-        );
+        return try core.runSystemAction(allocator, .audio_mute_toggle);
     }
 
     return false;
@@ -953,9 +1462,63 @@ fn dispatchGuiWidgetClick(
     if (std.mem.eql(u8, widget_id, "tiling-algorithm")) {
         return applyGuiAction(allocator, cfg, &.{"cycle-tiling-algorithm"});
     }
+    if (std.mem.eql(u8, widget_id, "display-layout")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-display-layout"});
+    }
+    if (std.mem.eql(u8, widget_id, "display-scale-minus")) {
+        return applyGuiAction(allocator, cfg, &.{ "adjust-display-scale", "-10" });
+    }
+    if (std.mem.eql(u8, widget_id, "display-scale-plus")) {
+        return applyGuiAction(allocator, cfg, &.{ "adjust-display-scale", "10" });
+    }
 
     if (std.mem.eql(u8, widget_id, "natural-scroll")) {
         return applyGuiAction(allocator, cfg, &.{"toggle-natural-scroll"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "theme-mode")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-theme-mode"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "theme-profile")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-theme-profile"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "default-terminal")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-default-terminal"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "default-browser")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-default-browser"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "default-files")) {
+        return applyGuiAction(allocator, cfg, &.{"cycle-default-files"});
+    }
+
+    if (std.mem.eql(u8, widget_id, "shortcut-launcher")) {
+        try cycleShortcutBinding(allocator, .launcher_toggle);
+        return true;
+    }
+
+    if (std.mem.eql(u8, widget_id, "shortcut-terminal")) {
+        try cycleShortcutBinding(allocator, .terminal_open);
+        return true;
+    }
+
+    if (std.mem.eql(u8, widget_id, "shortcut-browser")) {
+        try cycleShortcutBinding(allocator, .browser_open);
+        return true;
+    }
+
+    if (std.mem.eql(u8, widget_id, "shortcut-files")) {
+        try cycleShortcutBinding(allocator, .files_open);
+        return true;
+    }
+
+    if (std.mem.eql(u8, widget_id, "shortcut-settings")) {
+        try cycleShortcutBinding(allocator, .settings_open);
+        return true;
     }
 
     if (std.mem.eql(u8, widget_id, "pointer-sensitivity")) {
@@ -989,6 +1552,9 @@ fn dispatchGuiWidgetClick(
     if (std.mem.eql(u8, widget_id, "system-logout")) {
         return applyGuiAction(allocator, cfg, &.{"system-logout"});
     }
+    if (std.mem.eql(u8, widget_id, "system-network")) {
+        return applyGuiAction(allocator, cfg, &.{"system-network-open"});
+    }
     if (std.mem.eql(u8, widget_id, "audio-volume-up")) {
         return applyGuiAction(allocator, cfg, &.{"audio-volume-up"});
     }
@@ -1002,27 +1568,30 @@ fn dispatchGuiWidgetClick(
     return false;
 }
 
-fn runSystemCommandFallback(allocator: std.mem.Allocator, candidates: []const []const []const u8) !bool {
-    for (candidates) |argv| {
-        if (argv.len == 0) continue;
-        if (try runCommandOk(allocator, argv)) return true;
-    }
-    return false;
+fn cycleShortcutBinding(allocator: std.mem.Allocator, action: core.ShortcutAction) !void {
+    var shortcuts = try core.loadShortcuts(allocator);
+    defer core.freeShortcuts(allocator, &shortcuts);
+
+    const current = core.shortcutBinding(shortcuts.items, action);
+    const next = nextShortcutChord(action, current);
+    try core.setShortcutBinding(allocator, &shortcuts, action, next);
+    try core.saveShortcuts(allocator, shortcuts.items);
 }
 
-fn runCommandOk(allocator: std.mem.Allocator, argv: []const []const u8) !bool {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
-        .argv = argv,
-        .max_output_bytes = 16 * 1024,
-    }) catch return false;
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    return switch (result.term) {
-        .Exited => |code| code == 0,
-        else => false,
+fn nextShortcutChord(action: core.ShortcutAction, current: []const u8) []const u8 {
+    const choices = switch (action) {
+        .launcher_toggle => [_][]const u8{ "Super+Space", "Alt+Space", "Ctrl+Space" },
+        .terminal_open => [_][]const u8{ "Super+Enter", "Ctrl+Alt+T", "Super+T" },
+        .browser_open => [_][]const u8{ "Super+B", "Ctrl+Alt+B", "Super+W" },
+        .files_open => [_][]const u8{ "Super+E", "Ctrl+Alt+E", "Super+F" },
+        .settings_open => [_][]const u8{ "Super+,", "Ctrl+Alt+S", "Super+S" },
     };
+
+    for (choices, 0..) |choice, idx| {
+        if (!std.mem.eql(u8, choice, current)) continue;
+        return choices[(idx + 1) % choices.len];
+    }
+    return choices[0];
 }
 
 fn runLayoutDemo(
@@ -1100,7 +1669,6 @@ fn runLayoutDemo(
     };
 
     try ui.applyWindowLayout(allocator, mode, output, windows.items, config);
-
     std.debug.print(
         "Layout demo output={s} mode={s} algo={s} ratio={d}% gap={d}\n",
         .{ output.name, @tagName(mode), @tagName(algo), config.master_ratio_percent, config.spacing },

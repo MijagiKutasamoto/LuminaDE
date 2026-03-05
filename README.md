@@ -16,6 +16,16 @@ Projekt jest przygotowany pod dwa warianty dystrybucji:
 - Wielojęzyczność (na start EN/PL)
 - Integracja ustawień desktop + system
 
+## Komentarze Srodowiska (PL)
+
+- `panel`: gorna belka sesji (workspace, szybkie akcje, statusy `Net/Vol/Bat`).
+- `launcher`: centralny overlay do wyszukiwania aplikacji i polecen.
+- `settings`: centrum konfiguracji desktop + podstawowe akcje systemowe.
+- `welcome`: onboarding pierwszego uruchomienia (jezyk, tryb interakcji, layout).
+- `sessiond`: supervisor aplikacji sesji (start/restart/routing zdarzen).
+- `luminade-core`: wspolny runtime, profile, i18n, helpery systemowe.
+- `luminade-ui`: kontrakt GUI + dekoracje + model ikon `icon:<nazwa> <tekst>`.
+
 ## Struktura repo
 
 - `apps/panel` – panel
@@ -41,11 +51,122 @@ zig build run-settings
 zig build run-sessiond
 ```
 
+## Planowany wyglad (referencja)
+
+Aktualny kierunek wizualny LuminaDE (dla dalszych iteracji UI) jest oparty o dwa mockupy w root repo:
+- `Gemini_Generated_Image_gbpm1zgbpm1zgbpm.png`
+- `Gemini_Generated_Image_hd4otahd4otahd4o.png`
+
+Domyslne parametry profilu zostaly przesuniete pod ten kierunek:
+- `panel_height=42`
+- `corner_radius=18`
+- `blur_sigma=20`
+- `launcher_width=960`
+- `workspace_gaps=12`
+- `layout_gap=12`
+- `default_terminal_app=foot`
+- `default_browser_app=firefox`
+- `default_files_app=thunar`
+
+### Ikony SVG LuminaDE
+
+Czy ikony sa podpiete i powinny sie wyswietlac?
+- Tak: pliki `.desktop` maja wpisane `Icon=` (`luminade`, `luminade-settings`).
+- Tak: instalator kopiuje ikony do `hicolor/scalable` i `hicolor/symbolic`.
+- Tak: tworzone sa aliasy Freedesktop (`network-wireless-symbolic`, `audio-volume-high-symbolic`, itd.).
+- Warunek runtime: po instalacji uruchomic `scripts/install-session-files.sh` (najlepiej jako `root`) i odswiezyc cache ikon.
+
+Repo zawiera natywny zestaw ikon SVG:
+- `assets/icons/luminade.svg` (logo glowne)
+- `assets/icons/luminade-panel.svg`
+- `assets/icons/luminade-launcher.svg`
+- `assets/icons/luminade-settings.svg`
+- `assets/icons/luminade-wifi.svg`
+- `assets/icons/luminade-bluetooth.svg`
+- `assets/icons/luminade-audio.svg`
+- `assets/icons/luminade-volume-muted.svg`
+- `assets/icons/luminade-battery.svg`
+- `assets/icons/luminade-power.svg`
+- `assets/icons/luminade-lock.svg`
+- `assets/icons/luminade-suspend.svg`
+- `assets/icons/luminade-logout.svg`
+- `assets/icons/luminade-terminal.svg`
+- `assets/icons/luminade-browser.svg`
+- `assets/icons/luminade-files.svg`
+- `assets/icons/luminade-workspaces.svg`
+- `assets/icons/luminade-notifications.svg`
+- `assets/icons/luminade-display.svg`
+- `assets/icons/luminade-brightness.svg`
+- `assets/icons/luminade-airplane-mode.svg`
+- `assets/icons/luminade-keyboard.svg`
+- `assets/icons/luminade-mouse.svg`
+- `assets/icons/luminade-theme-dark.svg`
+- `assets/icons/luminade-theme-light.svg`
+- `assets/icons/luminade-network-offline.svg`
+
+Wersje panelowe `symbolic` (monochromatyczne):
+- `assets/icons/symbolic/*-symbolic.svg`
+
+Dodatkowo instalator tworzy aliasy zgodne z Freedesktop, m.in.:
+- `network-wireless-symbolic`
+- `audio-volume-high-symbolic`
+- `audio-volume-muted-symbolic`
+- `battery-good-symbolic`
+- `system-shutdown-symbolic`
+- `system-suspend-symbolic`
+- `system-lock-screen-symbolic`
+- `preferences-system-symbolic`
+- `video-display-symbolic`
+
+Panel, Settings i Launcher używają konwencji etykiet widgetów:
+- `icon:<nazwa-ikony> <tekst>`
+
+Przyklad:
+- `icon:audio-volume-muted-symbolic Mute`
+
+Konwencja jest obslugiwana centralnie przez `luminade-ui`:
+- `ui.composeIconLabel(...)`
+- `ui.parseIconLabel(...)`
+
+Skrypt `scripts/install-session-files.sh` instaluje je do:
+- `/usr/share/icons/hicolor/scalable/apps/`
+- `/usr/share/icons/hicolor/symbolic/apps/`
+
+Po instalacji skrypt odswieza cache ikon (`gtk-update-icon-cache`) jesli narzedzie jest dostepne.
+
 Przełączenie języka:
 
 ```bash
 LUMINADE_LANG=pl zig build run-settings
 ```
+
+Pliki jezykowe sa trzymane w:
+- `config/locales/en.json`
+- `config/locales/pl.json`
+
+Locale sa podzielone na sekcje (`panel.*`, `launcher.*`, `settings.*`).
+W plikach JSON opisy sekcji sa realizowane przez klucze `_comment.*`
+(JSON nie wspiera natywnych komentarzy).
+
+Opcjonalnie mozna wskazac inny katalog locale:
+
+```bash
+LUMINADE_LOCALES_DIR=/etc/luminade/locales LUMINADE_LANG=pl zig build run-panel
+```
+
+## Persistencja ustawien (load przy logowaniu)
+
+Ustawienia uzytkownika sa trzymane w katalogu runtime projektu:
+- `.luminade/profile.conf` - glowny profil desktopu (theme, layout, input, gaps, itp.)
+- `.luminade/lang.conf` - zapamietany jezyk UI
+- `.luminade/first-run.done` - marker ukonczenia welcome (z opcja "nie pokazuj wiecej")
+- `.luminade/device-profiles.conf` - profile wejscia per urzadzenie
+
+Przy starcie aplikacji (`panel`, `launcher`, `settings`, `welcome`) `RuntimeConfig.init()` laduje:
+1. profil z `.luminade/profile.conf` (albo modern defaults, gdy brak),
+2. jezyk z `LUMINADE_LANG` albo z `.luminade/lang.conf`.
+
+To oznacza, ze po kazdym logowaniu sesja czyta ten sam zestaw ustawien bez dodatkowego kroku migracji.
 
 Etap 1 MVP (działające komendy):
 
@@ -79,6 +200,10 @@ zig build run-launcher -- favorite add terminal
 zig build run-launcher -- favorite list
 zig build run-launcher -- favorite remove terminal
 
+# cache indeksu aplikacji z plikow .desktop
+# (domyslnie: .luminade/launcher-desktop-index.tsv)
+LUMINADE_LAUNCHER_DESKTOP_CACHE=.luminade/launcher-desktop-index.tsv zig build run-launcher -- --all
+
 # GUI-first settings (event queue)
 cat > .luminade/gui-settings-events.tsv <<'EOF'
 window-mode
@@ -100,6 +225,7 @@ LUMINADE_THEME=dark LUMINADE_DENSITY=comfortable LUMINADE_MOTION=smooth zig buil
 LUMINADE_PANEL_AUTOHIDE=true zig build run-panel
 LUMINADE_WINDOW_MODE=hybrid LUMINADE_INTERACTION_MODE=mouse_first zig build run-panel
 LUMINADE_POINTER_SENSITIVITY=25 LUMINADE_POINTER_ACCEL_PROFILE=adaptive LUMINADE_NATURAL_SCROLL=true LUMINADE_TAP_TO_CLICK=true zig build run-panel
+LUMINADE_DEFAULT_TERMINAL_APP=kitty LUMINADE_DEFAULT_BROWSER_APP=chromium LUMINADE_DEFAULT_FILES_APP=dolphin zig build run-panel
 
 # fullscreen + multi-output override (opcjonalnie)
 LUMINADE_OUTPUTS="eDP-1:2560x1600@1.0,HDMI-1:1920x1080@1.0" zig build run-launcher -- --all
@@ -117,6 +243,8 @@ Watcher wybiera backend automatycznie w kolejności: `wayland` (sesja `WAYLAND_D
 
 Profil pointer/touchpad (`pointer_sensitivity`, `pointer_accel_profile`, `natural_scroll`, `tap_to_click`) wpływa na hitbox/focus policy i ranking launchera; docelowo te same wartości będą mapowane 1:1 na konfigurację urządzeń wejściowych Wayland.
 
+Profil domyślnych aplikacji (`default_terminal_app`, `default_browser_app`, `default_files_app`) jest współdzielony przez Settings, Launcher i quick-launch w Panelu.
+
 `Layout Manager` (w `luminade-ui`) wspiera:
 - `window_mode`: `tiling` / `floating` / `hybrid`
 - `tiling_algorithm`: `master_stack` / `grid`
@@ -124,11 +252,26 @@ Profil pointer/touchpad (`pointer_sensitivity`, `pointer_accel_profile`, `natura
 
 GUI pass (panel/launcher/settings) jest aktywny przez model `GuiFrame` + `GuiWidget` + dekoracje (titlebar + przyciski). To jest warstwa GUI runtime i dekoracji, ale **natywny panel Wayland (`layer-shell`) nadal pozostaje kolejnym krokiem**.
 
-Panel ma już adapter natywny (`NativePanelSession`) z `native-first` bootstrap: przy dostępności `XDG_RUNTIME_DIR` + `WAYLAND_DISPLAY` wykonywany jest realny handshake Wayland (`wl_registry` discovery), wykrycie `wl_compositor` + `zwlr_layer_shell_v1`, a następnie minimalny smoke-create surface (`anchor: top+left+right`, `exclusive_zone = panel_height`). Gdy bootstrap się nie powiedzie, frame trafia do `.luminade/native-panel-state.tsv` jako fallback bridge.
+Panel ma już adapter natywny (`NativePanelSession`) z `native-first` bootstrap: przy dostępności `XDG_RUNTIME_DIR` + `WAYLAND_DISPLAY` wykonywany jest realny handshake Wayland (`wl_registry` discovery), wykrycie `wl_compositor` + `zwlr_layer_shell_v1`, a następnie minimalny smoke-create surface (`anchor: top+left+right`, `exclusive_zone = panel_height`). Gdy bootstrap się nie powiedzie, frame trafia do per-output state fallback (domyślnie: `.luminade/native-panel-state-<output>.tsv`).
 
 Zmienne runtime:
 - `LUMINADE_LAYER_SHELL_SMOKE_CREATE=0` wyłącza jednorazowy smoke-create i zostawia sam discovery/probe.
-- `LUMINADE_NATIVE_PANEL_STATE` zmienia ścieżkę fallback state.
+- `LUMINADE_LAYER_SHELL_SMOKE_CREATE=once` jest aliasem kompatybilności (native commit nadal wykonuje pełny lifecycle surface).
+- `LUMINADE_LAYER_SHELL_SMOKE_CREATE=always` wymusza smoke-create przy każdym native probe.
+- `LUMINADE_NATIVE_PANEL_PRIMARY=1` (domyślnie) utrzymuje panel na ścieżce native po pierwszym udanym commicie, bez powrotu do bridge TSV.
+- `LUMINADE_NATIVE_PANEL_STATE` zmienia ścieżkę fallback state (obsługuje placeholder `{output}`).
+- `LUMINADE_LAUNCHER_DESKTOP_CACHE` ustawia ścieżkę cache indeksu `.desktop` dla launchera (domyślnie `.luminade/launcher-desktop-index.tsv`).
+- `LUMINADE_LAUNCHER_DESKTOP_REFRESH=1` wymusza przebudowę cache `.desktop` przy starcie launchera (bez czekania na mtime refresh).
+
+Launcher cache `.desktop` działa incremental:
+- pliki niezmienione są ładowane z cache,
+- zmienione/new `.desktop` są parsowane ponownie,
+- usunięte `.desktop` są automatycznie usuwane z indeksu.
+
+ID wpisu launchera dla `.desktop` jest celowo proste i stabilne:
+- domyślnie bazuje na nazwie pliku `.desktop` (bez rozszerzenia),
+- opcjonalnie preferuje `X-Flatpak` lub `StartupWMClass`, jeśli są dostępne.
+- przy kolizji ID launcher dopisuje suffix (`-2`, `-3`) zamiast pomijać wpis.
 
 Zabezpieczenia anty-flood (panel natywny):
 - throttling prób native `layer-shell` z exponential backoff (250ms → max 30s),
@@ -253,5 +396,5 @@ Profil runtime zapisywany jest domyślnie do `./.luminade/profile.conf`
 
 ## Status
 
-Aktualnie: **v0.4 ZIG** (GUI-first runtime, dojrzały sessiond, mouse UX, multi-monitor, settings i18n + System & Power).
-Kolejny krok: implementacja produkcyjnych klientów Wayland (`layer-shell`, `xdg-shell`) i pełne moduły ustawień systemowych.
+Aktualnie: **v0.5-dev** (native panel, launcher/settings po pixel-pass, domyslne aplikacje, onboarding, i18n PL/EN).
+Kolejny krok: domkniecie punktow `v0.5` z roadmapy (pelny i18n chain, polish welcome, fundament systemu motywow).

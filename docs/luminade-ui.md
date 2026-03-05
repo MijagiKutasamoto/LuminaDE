@@ -15,9 +15,40 @@ Własna biblioteka GUI w Zig dla LuminaDE, by panel/launcher/settings miały wsp
 - Render spec: physical/logical size + scale per output
 - Dekoracje: model titlebar, drag region, close/maximize/minimize buttons
 
+## Domyślny profil motywu (v0.4.1+)
+`luminade-ui` przyjmuje profil bazowy zgodny z planowanym lookiem:
+- `corner_radius = 18`
+- `spacing_unit = 10`
+- `blur_sigma = 20`
+
+Domyślne dekoracje:
+- launcher titlebar: `42`
+- settings titlebar: `44`
+
+Motywy są teraz podpinane globalnie przez `SurfaceDecorationTheme`:
+- `fullscreenSurfaceThemed(...)`
+- `launcherSurfaceThemed(...)`
+- `settingsSurfaceThemed(...)`
+
+`SurfaceDecorationTheme` jest mapowany z tokenów (`ThemeTokens`) i kontroluje:
+- wysokość titlebara launchera,
+- wysokość titlebara settings,
+- round corners/shadow dla wszystkich dekorowanych powierzchni.
+
 ## Zakres v1
 - Wayland-native backend (xdg-shell/layer-shell)
 - GPU renderer (wgpu/vulkan lub OpenGL ES)
+
+## Konwencja ikon w widgetach
+
+`luminade-ui` wspiera konwencje etykiet ikonowych:
+- format: `icon:<icon-name> <text>`
+
+API:
+- `parseIconLabel(label)` -> rozbija etykiete na `icon_name` i `text`
+- `composeIconLabel(allocator, icon_name, text)` -> buduje etykiete w formacie konwencji
+
+To jest wspolna sciezka uzywana przez `panel`, `launcher` i `settings`.
 - Animacje i transitions
 - Accessibility hooks (reduced motion, high contrast)
 
